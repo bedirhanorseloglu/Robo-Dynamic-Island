@@ -1,0 +1,96 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('twocode', {
+  setIgnoreMouseEvents: (ignore) => ipcRenderer.send('set-ignore-mouse-events', ignore),
+  setExpanded: (expanded) => ipcRenderer.send('set-expanded', expanded),
+  setIslandMode: (mode, customWidth) => ipcRenderer.send('set-island-mode', mode, customWidth),
+  onNotchHoverChange: (cb) => {
+    const listener = (_event, hovering) => cb(hovering);
+    ipcRenderer.on('notch-hover-change', listener);
+    return () => ipcRenderer.removeListener('notch-hover-change', listener);
+  },
+  openSettingsWindow: (tab) => ipcRenderer.invoke('open-settings-window', tab),
+  settingsWindowControl: (action) => ipcRenderer.send('settings-window-control', action),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
+  onSettingsUpdated: (cb) => {
+    const listener = (_event, data) => cb(data);
+    ipcRenderer.on('settings-updated', listener);
+    return () => ipcRenderer.removeListener('settings-updated', listener);
+  },
+  onNavigateSettingsTab: (cb) => {
+    const listener = (_event, tab) => cb(tab);
+    ipcRenderer.on('navigate-settings-tab', listener);
+    return () => ipcRenderer.removeListener('navigate-settings-tab', listener);
+  },
+  pickProgramFile: () => ipcRenderer.invoke('pick-program-file'),
+  triggerIslandEmotion: (emotion) => ipcRenderer.send('trigger-island-emotion', emotion),
+  onIslandEmotion: (cb) => {
+    const listener = (_event, emotion) => cb(emotion);
+    ipcRenderer.on('island-emotion', listener);
+    return () => ipcRenderer.removeListener('island-emotion', listener);
+  },
+  triggerTestNotification: (notif) => ipcRenderer.send('trigger-test-notification', notif),
+  getAiHistory: () => ipcRenderer.invoke('get-ai-history'),
+  onAiHistoryUpdate: (cb) => {
+    const listener = (_event, data) => cb(data);
+    ipcRenderer.on('ai-history-update', listener);
+    return () => ipcRenderer.removeListener('ai-history-update', listener);
+  },
+  mediaControl: (action) => ipcRenderer.invoke('media-control', action),
+  launchMusicService: (service) => ipcRenderer.invoke('launch-music-service', service),
+  getMediaStatus: () => ipcRenderer.invoke('get-media-status'),
+  onMediaUpdate: (cb) => {
+    const listener = (_event, data) => cb(data);
+    ipcRenderer.on('media-update', listener);
+    return () => ipcRenderer.removeListener('media-update', listener);
+  },
+  onClipboardUpdate: (cb) => {
+    const listener = (_event, list) => cb(list);
+    ipcRenderer.on('clipboard-update', listener);
+    return () => ipcRenderer.removeListener('clipboard-update', listener);
+  },
+  copyText: (text) => ipcRenderer.invoke('copy-text', text),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  openNotificationTarget: (target) => ipcRenderer.invoke('open-notification-target', target),
+  captureScreen: () => ipcRenderer.invoke('capture-screen'),
+  getSystemStats: () => ipcRenderer.invoke('get-system-stats'),
+  onAgentEvent: (cb) => {
+    const listener = (_event, data) => cb(data);
+    ipcRenderer.on('agent-event', listener);
+    return () => ipcRenderer.removeListener('agent-event', listener);
+  },
+  resolveAgentApproval: (id, approved) => ipcRenderer.invoke('resolve-agent-approval', { id, approved }),
+  simulateAgentTask: (type) => ipcRenderer.invoke('simulate-agent-task', type),
+  adjustVolume: (direction) => ipcRenderer.invoke('adjust-volume', direction),
+  onSystemHud: (cb) => {
+    const listener = (_event, data) => cb(data);
+    ipcRenderer.on('system-hud', listener);
+    return () => ipcRenderer.removeListener('system-hud', listener);
+  },
+  onWindowsNotification: (cb) => {
+    const listener = (_event, notif) => cb(notif);
+    ipcRenderer.on('windows-notification', listener);
+    return () => ipcRenderer.removeListener('windows-notification', listener);
+  },
+  getNetworkInfo: () => ipcRenderer.invoke('get-network-info'),
+  getRadioStates: () => ipcRenderer.invoke('get-radio-states'),
+  toggleRadio: (kind) => ipcRenderer.invoke('toggle-radio', kind),
+  scanWifiNetworks: () => ipcRenderer.invoke('scan-wifi-networks'),
+  scanBluetoothDevices: () => ipcRenderer.invoke('scan-bluetooth-devices'),
+  pairBluetoothDevice: (deviceId) => ipcRenderer.invoke('pair-bluetooth-device', deviceId),
+  addAgendaEvent: (evt) => ipcRenderer.invoke('add-agenda-event', evt),
+  getFileIcon: (filePath) => ipcRenderer.invoke('get-file-icon', filePath),
+  testMailNotif: () => ipcRenderer.invoke('test-mail-notif'),
+  testAgendaNotif: () => ipcRenderer.invoke('test-agenda-notif'),
+  connectGoogle: (opts) => ipcRenderer.invoke('connect-google', opts),
+  disconnectGoogle: () => ipcRenderer.invoke('disconnect-google'),
+  getGoogleData: () => ipcRenderer.invoke('get-google-data'),
+  onGoogleDataUpdate: (cb) => {
+    const listener = (_event, data) => cb(data);
+    ipcRenderer.on('google-data-update', listener);
+    return () => ipcRenderer.removeListener('google-data-update', listener);
+  },
+  askRobo: (payload) => ipcRenderer.invoke('ask-robo', payload),
+  quitApp: () => ipcRenderer.send('quit-app'),
+});

@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "project": {
+    "name": "twocode-island",
+    "productType": "Windows desktop productivity overlay",
+    "stack": [
+      "react",
+      "vite"
+    ]
+  },
+  "sources": {
+    "tokens": ["src/styles.css"],
+    "components": [],
+    "assets": [],
+    "instructions": []
+  },
+  "design": {
+    "colorMode": "dark",
+    "colors": {
+      "base": "#000000",
+      "surface": "#101013",
+      "primaryAccent": "#3b82f6",
+      "roboHappy": "#75ffb0",
+      "roboCurious": "#ffd479"
+    },
+    "typography": {
+      "ui": "Inter",
+      "code": "JetBrains Mono"
+    },
+    "spacing": {
+      "density": "compact"
+    },
+    "radius": {
+      "control": "8px",
+      "panel": "20px",
+      "island": "24px"
+    },
+    "shadows": {
+      "style": "low-opacity ambient glows with restrained drop shadows"
+    },
+    "motion": {
+      "style": "short spring-like interaction feedback and playful Robo micro-animations",
+      "accessibility": "respect prefers-reduced-motion"
+    },
+    "density": "compact"
+  },
+  "components": {
+    "installed": [],
+    "preferredPrimitives": [],
+    "patterns": []
+  },
+  "constraints": {
+    "must": [
+      "Preserve the black Dynamic Island silhouette and its compact layout.",
+      "Keep Robo interactions playful but brief and respect reduced-motion preferences."
+    ],
+    "avoid": []
+  },
+  "decisions": [
+    {
+      "area": "notification history",
+      "choice": "Use an icon-only bell beside the home top-bar menu; open a compact popover with per-item delete and clear-all actions.",
+      "date": "2026-11-08"
+    }
+  ],
+  "evidence": [
+    {
+      "fact": "project.stack:react",
+      "source": "package.json"
+    },
+    {
+      "fact": "project.stack:vite",
+      "source": "package.json"
+    }
+  ],
+  "generatedAt": "2026-11-07T21:50:41.615Z"
+}
