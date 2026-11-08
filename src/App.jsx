@@ -462,6 +462,7 @@ export default function App() {
   const [now, setNow] = useState(new Date());
   const [batteryDelta] = useState(-10);
   const [batteryPercent, setBatteryPercent] = useState(80);
+  const [batteryCharging, setBatteryCharging] = useState(false);
   const [batteryAlertKind, setBatteryAlertKind] = useState('low');
   const [isCustomizingClock, setIsCustomizingClock] = useState(false);
   const [clockFontIndex, setClockFontIndex] = useState(() => {
@@ -977,6 +978,7 @@ export default function App() {
 
     const triggerBatteryAlert = (pct) => {
       setBatteryPercent(pct);
+      setBatteryCharging(false);
       setBatteryAlertKind('low');
       setIslandMode((current) => {
         if (current === 'expanded') return current;
@@ -985,6 +987,7 @@ export default function App() {
     };
 
     const triggerChargingAlert = () => {
+      setBatteryCharging(true);
       setBatteryAlertKind('charging');
       setIslandMode((current) => (current === 'expanded' ? current : 'battery'));
     };
@@ -995,11 +998,13 @@ export default function App() {
       setBatteryPercent(nextPct);
 
       if (batteryObj.charging) {
+        setBatteryCharging(true);
         if (wasCharging === false) triggerChargingAlert();
         wasCharging = true;
         hasShown20AlertRef.current = false;
         return;
       }
+      setBatteryCharging(false);
       wasCharging = false;
 
       if (nextPct > 20) {
@@ -1019,6 +1024,7 @@ export default function App() {
         .then((bat) => {
           batteryObj = bat;
           wasCharging = Boolean(bat.charging);
+          setBatteryCharging(wasCharging);
           const pct = Math.round(bat.level * 100);
           if (pct > 0 && pct <= 100) {
             setBatteryPercent(pct);
@@ -1686,7 +1692,7 @@ export default function App() {
             ============================================================ */}
         <div className={`morph-layer layer-idle ${islandMode === 'idle' ? 'is-visible' : ''}`}>
           <div className="idle-eyes-center">
-            <RoboEyes mood={topEyeMood} size="normal" batteryPercent={batteryPercent} />
+            <RoboEyes mood={topEyeMood} size="normal" batteryPercent={batteryPercent} batteryCharging={batteryCharging} />
           </div>
         </div>
 
@@ -2040,6 +2046,7 @@ export default function App() {
                 <RoboEyes
                   mood={topEyeMood}
                   batteryPercent={batteryPercent}
+                  batteryCharging={batteryCharging}
                   onPoke={(m) => {
                     setRoboMood(m);
                     playRoboSound(m, islandSettings.soundEffects !== false);

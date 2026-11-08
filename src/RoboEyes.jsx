@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { playRoboSound } from './sounds';
 
-export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal', batteryPercent }) {
+export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal', batteryPercent, batteryCharging = false }) {
   const [blink, setBlink] = useState(false);
   const [wakePhase, setWakePhase] = useState('closed'); // 'closed' | 'flutter' | 'look-left' | 'look-right' | 'happy' | 'done'
   const [lookOffset, setLookOffset] = useState({ x: 0, y: 0 });
@@ -135,7 +135,7 @@ export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal', bat
   return (
     <div
       ref={containerRef}
-      className={`robo-eyes-wrap ${activeMood} ${Number.isFinite(batteryPercent) && batteryPercent <= 20 ? 'is-low-battery' : ''}`}
+      className={`robo-eyes-wrap ${activeMood} ${batteryCharging ? 'is-charging' : ''} ${!batteryCharging && Number.isFinite(batteryPercent) && batteryPercent <= 20 ? 'is-low-battery' : ''}`}
       onClick={handleClick}
       title="Robo"
       style={{
@@ -143,6 +143,14 @@ export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal', bat
       }}
     >
       <span className="robo-mood-spark" aria-hidden="true" />
+      {batteryCharging && (
+        <span className="robo-charge-battery" aria-hidden="true" title={`Şarj oluyor · ${batteryPercent}%`}>
+          <span
+            className="robo-charge-battery-fill"
+            style={{ width: `${Math.min(100, Math.max(0, Number(batteryPercent) || 0))}%` }}
+          />
+        </span>
+      )}
       {isHeartEyes ? (
         <>
           <span className="robo-heart-eye left">♥</span>

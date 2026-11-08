@@ -281,7 +281,7 @@ function applyStartWithWindows(enabled) {
     const options = { openAtLogin: Boolean(enabled), enabled: Boolean(enabled) };
     if (process.platform === 'win32') {
       options.path = process.execPath;
-      options.args = app.isPackaged ? [] : [app.getAppPath()];
+      options.args = app.isPackaged ? [] : [`"${app.getAppPath()}"`];
     }
     app.setLoginItemSettings(options);
     return true;
