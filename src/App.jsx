@@ -954,7 +954,22 @@ export default function App() {
 
   const hasShown20AlertRef = useRef(false);
 
-  // Read real Windows battery percentage via Web Battery API (Alert ONLY at exact 20%)
+  // Keep the battery banner's lifetime tied to its visible state so every
+  // entry path (battery API or the manual preview) dismisses consistently.
+  useEffect(() => {
+    if (islandMode !== 'battery') return undefined;
+    batteryTimerRef.current = setTimeout(() => {
+      setIslandMode((current) =>
+        current === 'battery' ? resolvedCollapsedModeRef.current : current
+      );
+    }, 4800);
+    return () => {
+      clearTimeout(batteryTimerRef.current);
+      batteryTimerRef.current = null;
+    };
+  }, [islandMode]);
+
+  // Read real Windows battery percentage and alert only at exactly 20%.
   useEffect(() => {
     let batteryObj = null;
 
@@ -962,10 +977,6 @@ export default function App() {
       setBatteryPercent(pct);
       setIslandMode((current) => {
         if (current === 'expanded') return current;
-        if (batteryTimerRef.current) clearTimeout(batteryTimerRef.current);
-        batteryTimerRef.current = setTimeout(() => {
-          setIslandMode((curr) => (curr === 'battery' ? resolvedCollapsedModeRef.current : curr));
-        }, 4800);
         return 'battery';
       });
     };
@@ -982,7 +993,7 @@ export default function App() {
 
       if (nextPct === 20 && !batteryObj.charging && !hasShown20AlertRef.current) {
         hasShown20AlertRef.current = true;
-        triggerBatteryAlert(20);
+        triggerBatteryAlert(nextPct);
       }
     };
 
@@ -996,10 +1007,7 @@ export default function App() {
             setBatteryPercent(pct);
             if (pct === 20 && !bat.charging && !hasShown20AlertRef.current) {
               hasShown20AlertRef.current = true;
-              setTimeout(() => triggerBatteryAlert(20), 1400);
-            } else if (pct < 20) {
-              // Already below 20% (e.g. 16%, 15%, 14%) — do not spam alerts
-              hasShown20AlertRef.current = true;
+              batteryTimerRef.current = setTimeout(() => triggerBatteryAlert(pct), 1400);
             }
           }
           bat.addEventListener('levelchange', handleBatteryChange);
@@ -1344,12 +1352,8 @@ export default function App() {
   }, [now, timerSeconds]);
 
   const showBatteryPopup = () => {
-    if (batteryTimerRef.current) clearTimeout(batteryTimerRef.current);
     setIslandMode('battery');
     playRoboSound('surprised', islandSettings.soundEffects !== false);
-    batteryTimerRef.current = setTimeout(() => {
-      setIslandMode((curr) => (curr === 'battery' ? resolvedCollapsedMode : curr));
-    }, 4500);
   };
 
   // Right-click on the notch toggles the thin progress bar (`mini-progress`)

@@ -5093,3 +5093,27 @@ body,
 }
 
 
+/* Give each Robo expression its own calm, readable accent. */
+.robo-eye.normal {
+  --robo-eye-color: #a9c8ff;
+  animation: roboEyeGlow 3.2s ease-in-out infinite;
+}
+
+.robo-eye.wake-flutter,
+.robo-eye.wake-closed { --robo-eye-color: #ffd479; }
+.robo-eye.wake-happy,
+.robo-eye.happy { --robo-eye-color: #75ffb0; }
+.robo-eye.curious { --robo-eye-color: #ffd479; }
+.robo-eye.wink { --robo-eye-color: #8ecbff; }
+.robo-eye.dizzy { --robo-eye-color: #ff83b5; }
+.robo-eyes-wrap.idle-sleep .robo-eye { --robo-eye-color: #b8a4ff; }
+.robo-eyes-wrap.idle-peek .robo-eye { --robo-eye-color: #7ee7e2; }
+.robo-eyes-wrap.idle-dance .robo-eye { --robo-eye-color: #a9c8ff; }
+.robo-eyes-wrap.idle-boop .robo-eye { --robo-eye-color: #ff9bd2; }
+
+@keyframes roboEyeGlow {
+  0%, 100% { filter: brightness(0.92); }
+  50% { filter: brightness(1.22); }
+}
+
+  .robo-eye.normal,
