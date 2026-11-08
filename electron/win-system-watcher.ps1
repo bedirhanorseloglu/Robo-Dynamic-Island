@@ -95,41 +95,53 @@ $seenNotifIds = @{}
 $watcherStartedAt = [DateTimeOffset]::Now
 $notificationsInitialized = $false
 $initialized = $false
+$lastVolumePoll = [DateTimeOffset]::MinValue
+$lastBrightnessPoll = [DateTimeOffset]::MinValue
+$lastNotificationPoll = [DateTimeOffset]::MinValue
 
 while ($true) {
     try {
-        # 1. Check Volume & Mute
-        $muted = $false
-        $vol = [WinAudioHelper]::GetVolume([ref]$muted)
-        if ($vol -ge 0) {
-            if (-not $initialized) {
-                $lastVol = $vol
-                $lastMuted = $muted
-                $initObj = @{ event = 'init-audio'; volume = $vol; muted = [bool]$muted }
-                Write-Output ($initObj | ConvertTo-Json -Compress)
-            } elseif ($vol -ne $lastVol -or $muted -ne $lastMuted) {
-                $lastVol = $vol
-                $lastMuted = $muted
-                $evObj = @{ event = 'volume'; value = $vol; muted = [bool]$muted }
-                Write-Output ($evObj | ConvertTo-Json -Compress)
+        $now = [DateTimeOffset]::Now
+
+        # Audio controls stay responsive while avoiding repeated COM activation at 3 Hz.
+        if (($now - $lastVolumePoll).TotalMilliseconds -ge 500) {
+            $lastVolumePoll = $now
+            $muted = $false
+            $vol = [WinAudioHelper]::GetVolume([ref]$muted)
+            if ($vol -ge 0) {
+                if ($lastVol -lt 0) {
+                    $lastVol = $vol
+                    $lastMuted = $muted
+                    $initObj = @{ event = 'init-audio'; volume = $vol; muted = [bool]$muted }
+                    Write-Output ($initObj | ConvertTo-Json -Compress)
+                } elseif ($vol -ne $lastVol -or $muted -ne $lastMuted) {
+                    $lastVol = $vol
+                    $lastMuted = $muted
+                    $evObj = @{ event = 'volume'; value = $vol; muted = [bool]$muted }
+                    Write-Output ($evObj | ConvertTo-Json -Compress)
+                }
             }
         }
 
-        # 2. Check Screen Brightness
-        $bObj = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($null -ne $bObj -and $null -ne $bObj.CurrentBrightness) {
-            $bri = [int]$bObj.CurrentBrightness
-            if (-not $initialized) {
-                $lastBrightness = $bri
-            } elseif ($bri -ne $lastBrightness) {
-                $lastBrightness = $bri
-                $bEv = @{ event = 'brightness'; value = $bri }
-                Write-Output ($bEv | ConvertTo-Json -Compress)
+        # WMI is comparatively expensive and brightness changes are infrequent.
+        if (($now - $lastBrightnessPoll).TotalMilliseconds -ge 5000) {
+            $lastBrightnessPoll = $now
+            $bObj = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($null -ne $bObj -and $null -ne $bObj.CurrentBrightness) {
+                $bri = [int]$bObj.CurrentBrightness
+                if ($lastBrightness -lt 0) {
+                    $lastBrightness = $bri
+                } elseif ($bri -ne $lastBrightness) {
+                    $lastBrightness = $bri
+                    $bEv = @{ event = 'brightness'; value = $bri }
+                    Write-Output ($bEv | ConvertTo-Json -Compress)
+                }
             }
         }
 
-        # 3. Check Windows Toast Notifications
-        if ($notifSupported -and $null -ne $listener) {
+        # Keep notification delivery near real time without querying the toast store every loop.
+        if ($notifSupported -and $null -ne $listener -and ($now - $lastNotificationPoll).TotalMilliseconds -ge 1000) {
+            $lastNotificationPoll = $now
             $listType = [System.Collections.Generic.IReadOnlyList[Windows.UI.Notifications.UserNotification]]
             $notifs = Await-Op ($listener.GetNotificationsAsync([Windows.UI.Notifications.NotificationKinds]::Toast)) $listType
             if ($null -ne $notifs) {
@@ -203,5 +215,5 @@ while ($true) {
         $initialized = $true
     } catch {}
 
-    Start-Sleep -Milliseconds 350
+    Start-Sleep -Milliseconds 100
 }

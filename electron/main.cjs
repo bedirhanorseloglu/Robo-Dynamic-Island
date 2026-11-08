@@ -22,9 +22,7 @@ const https = require('https');
 const os = require('os');
 const fs = require('fs');
 
-app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('disable-gpu');
 
 const CANVAS_WIDTH = 700;
 const CANVAS_HEIGHT = 320;
@@ -44,6 +42,7 @@ const MODE_DIMENSIONS = {
 let mainWindow = null;
 let settingsWindow = null;
 let tray = null;
+let trayContextMenu = null;
 let lastMediaTitle = '';
 let lastMediaArtist = '';
 let cachedThumbnail = '';
@@ -256,6 +255,9 @@ function loadSettingsFromDisk() {
 
 function saveSettingsToDisk(nextSettings) {
   userSettings = { ...userSettings, ...(nextSettings || {}) };
+  if (Object.prototype.hasOwnProperty.call(nextSettings || {}, 'startWithWindows')) {
+    applyStartWithWindows(userSettings.startWithWindows !== false);
+  }
   try {
     fs.writeFileSync(
       getSettingsFilePath(),
@@ -269,7 +271,24 @@ function saveSettingsToDisk(nextSettings) {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.webContents.send('settings-updated', userSettings);
   }
+  const startupMenuItem = trayContextMenu?.getMenuItemById('start-with-windows');
+  if (startupMenuItem) startupMenuItem.checked = userSettings.startWithWindows !== false;
   return userSettings;
+}
+
+function applyStartWithWindows(enabled) {
+  try {
+    const options = { openAtLogin: Boolean(enabled), enabled: Boolean(enabled) };
+    if (process.platform === 'win32') {
+      options.path = process.execPath;
+      options.args = app.isPackaged ? [] : [app.getAppPath()];
+    }
+    app.setLoginItemSettings(options);
+    return true;
+  } catch (error) {
+    console.warn('Could not update Windows startup setting:', error?.message || error);
+    return false;
+  }
 }
 
 // Real local AI history state (Codex, Claude Code, Gemini CLI & Antigravity)
@@ -1051,12 +1070,11 @@ function createTray() {
     { type: 'separator' },
     {
       label: 'Start with Windows',
+      id: 'start-with-windows',
       type: 'checkbox',
-      checked: true,
+      checked: userSettings.startWithWindows !== false,
       click: (item) => {
-        try {
-          app.setLoginItemSettings({ openAtLogin: item.checked });
-        } catch {}
+        saveSettingsToDisk({ startWithWindows: item.checked });
       },
     },
     {
@@ -1085,6 +1103,7 @@ function createTray() {
       click: () => app.quit(),
     },
   ]);
+  trayContextMenu = contextMenu;
   tray.setContextMenu(contextMenu);
 }
 
@@ -1443,6 +1462,7 @@ app.on('will-quit', () => {
 
 app.whenReady().then(() => {
   loadSettingsFromDisk();
+  applyStartWithWindows(userSettings.startWithWindows !== false);
   loadSavedGoogleSession();
   createWindow();
   createTray();
@@ -1941,7 +1961,7 @@ function startGoogleBackgroundWorker() {
           nodeIntegration: false,
           contextIsolation: true,
           preload: path.join(__dirname, 'google-bg-preload.cjs'),
-          backgroundThrottling: false,
+          backgroundThrottling: true,
         },
       });
 
@@ -1978,7 +1998,7 @@ function startGoogleBackgroundWorker() {
           nodeIntegration: false,
           contextIsolation: true,
           preload: path.join(__dirname, 'google-bg-preload.cjs'),
-          backgroundThrottling: false,
+          backgroundThrottling: true,
         },
       });
 

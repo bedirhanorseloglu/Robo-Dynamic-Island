@@ -40,7 +40,7 @@ export default function HeroClock({
       style={{
         fontFamily,
         color,
-        fontSize: size === 'focus' ? undefined : `clamp(${Math.round(54 * scale)}px, ${(7.2 * scale).toFixed(2)}vw, ${Math.round(72 * scale)}px)`,
+        fontSize: size === 'focus' ? undefined : `clamp(${Math.round(76 * scale)}px, ${(13 * scale).toFixed(2)}vw, ${Math.round(128 * scale)}px)`,
       }}
     >
       {chars.map((ch, idx) => {

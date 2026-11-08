@@ -416,6 +416,10 @@ body,
   transform: scale(1);
 }
 
+.morph-layer.layer-expanded.is-visible {
+  transition: opacity 0.04s linear, transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* =========================================================
    LAYER 1: IDLE MINI-NOTCH (Tiny black notch + Robo's glowing eyes)
    ========================================================= */
@@ -1239,6 +1243,12 @@ body,
   padding-top: 10px;
 }
 
+.home-view.is-clock-customizing {
+  justify-content: space-between;
+  gap: 0;
+  padding-top: 10px;
+}
+
 .hero-clock {
   display: flex;
   align-items: center;
@@ -1249,7 +1259,7 @@ body,
   line-height: 0.95;
   letter-spacing: -0.03em;
   max-width: 100%;
-  margin: clamp(4px, 1.1vh, 10px) 0;
+  margin: 0 0 3px;
   cursor: pointer;
   transition: font-size 0.18s ease, color 0.18s ease;
   white-space: nowrap;
@@ -3639,30 +3649,6 @@ body,
   align-items: center;
   justify-content: center;
   color: rgba(255, 255, 255, 0.7);
-}
-
-.compact-lyric.karaoke-fill {
-  background: linear-gradient(
-    90deg,
-    #ffffff 0%,
-    #ffffff var(--lyric-pct, 100%),
-    rgba(255, 255, 255, 0.45) calc(var(--lyric-pct, 100%) + 6%)
-  );
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  transition: background 0.08s linear;
-}
-
-.lyric-line-active.karaoke-active-line {
-  background: linear-gradient(
-    90deg,
-    #ffffff 0%,
-    #ffffff var(--lyric-pct, 100%),
-    rgba(255, 255, 255, 0.45) calc(var(--lyric-pct, 100%) + 8%)
-  );
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  transition: background 0.08s linear;
 }
 
 /* 4. Home Connect Card & Tinted Media Card */

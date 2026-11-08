@@ -761,20 +761,25 @@ export default function App() {
   const liveMediaRef = useRef(liveMedia);
   liveMediaRef.current = liveMedia;
   const [smoothPosition, setSmoothPosition] = useState(0);
+  const lastMediaTickRef = useRef(Date.now());
 
   useEffect(() => {
     if (liveMedia && typeof liveMedia.position === 'number') {
       setSmoothPosition(liveMedia.position);
+      lastMediaTickRef.current = Date.now();
     }
   }, [liveMedia?.position, liveMedia?.title]);
 
-  // High-frequency sub-second smooth media position interpolation for fluid karaoke & lyrics
+  // Advance by real elapsed time so lyric timing stays locked to the media clock.
   useEffect(() => {
     const mediaTick = setInterval(() => {
+      const now = Date.now();
+      const elapsed = Math.min(1, Math.max(0, (now - lastMediaTickRef.current) / 1000));
+      lastMediaTickRef.current = now;
       const media = liveMediaRef.current;
       if (!media || !media.hasSession || !media.isPlaying) return;
       setSmoothPosition((prev) => {
-        const next = Math.round((prev + 0.1) * 10) / 10;
+        const next = prev + elapsed;
         return media.duration > 0 ? Math.min(media.duration, next) : next;
       });
     }, 250);
@@ -818,20 +823,17 @@ export default function App() {
       : '#ffffff';
 
   // Synced lyrics & karaoke line progress calculation with accurate intro & break handling
-  const { hasSyncedLyrics, primaryLine, secondaryLine, lyricLineProgress } = useMemo(() => {
+  const { hasSyncedLyrics, primaryLine, secondaryLine } = useMemo(() => {
     const list = currentMedia.lyrics || [];
     if (islandSettings.lyricsEnabled !== false && list.length > 0) {
       const pos = currentMedia.position || 0;
 
       // Handle instrumental intro before first sung line
       if (list[0]?.time && pos < (list[0].time - 0.5)) {
-        const introSpan = Math.max(0.5, list[0].time);
-        const introProg = Math.min(100, Math.max(0, (pos / introSpan) * 100));
         return {
           hasSyncedLyrics: true,
           primaryLine: currentMedia.title,
           secondaryLine: list[0]?.text || '',
-          lyricLineProgress: introProg,
         };
       }
 
@@ -844,11 +846,6 @@ export default function App() {
         }
       }
       const currItem = list[idx];
-      const currTime = currItem?.time || 0;
-      const nextTime = list[idx + 1]?.time || (currTime + 3.8);
-      const span = Math.max(0.5, nextTime - currTime);
-      const prog = Math.min(100, Math.max(0, ((pos - currTime) / span) * 100));
-
       const rawText = (currItem?.text || '').trim();
       const nextRawText = (list[idx + 1]?.text || '').trim();
 
@@ -856,14 +853,12 @@ export default function App() {
         hasSyncedLyrics: true,
         primaryLine: rawText || '♪ ♪ ♪',
         secondaryLine: nextRawText || '',
-        lyricLineProgress: prog,
       };
     }
     return {
       hasSyncedLyrics: false,
       primaryLine: currentMedia.title || 'Nothing playing',
       secondaryLine: currentMedia.artist || '',
-      lyricLineProgress: 100,
     };
   }, [currentMedia, islandSettings.lyricsEnabled]);
 
@@ -1627,7 +1622,6 @@ export default function App() {
           '--notif-accent-hex': notifBrand.hex,
           '--robo-eye-color': islandSettings.eyeColorHex || '#ffffff',
           '--dynamic-music-w': `${dynamicMusicBarWidth}px`,
-          '--lyric-pct': `${lyricLineProgress}%`,
         }}
         onMouseEnter={() => {
           if (islandMode !== 'expanded' && !isMiniProgressBar) {
@@ -2503,7 +2497,7 @@ export default function App() {
                         1. HOME TAB (Supports Clock / Grid / Dial / Minimal + Clock Customizer)
                         ============================================================ */}
                     {activeTab === 'home' && (
-                      <div className="home-view">
+                      <div className={`home-view ${isCustomizingClock ? 'is-clock-customizing' : ''}`}>
                         <HeroClock
                           timeStr={clockDisplay.time}
                           suffix={clockDisplay.suffix}
