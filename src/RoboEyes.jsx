@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { playRoboSound } from './sounds';
 
-export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal' }) {
+export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal', batteryPercent }) {
   const [blink, setBlink] = useState(false);
   const [wakePhase, setWakePhase] = useState('closed'); // 'closed' | 'flutter' | 'look-left' | 'look-right' | 'happy' | 'done'
   const [lookOffset, setLookOffset] = useState({ x: 0, y: 0 });
@@ -135,7 +135,7 @@ export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal' }) {
   return (
     <div
       ref={containerRef}
-      className={`robo-eyes-wrap ${activeMood}`}
+      className={`robo-eyes-wrap ${activeMood} ${Number.isFinite(batteryPercent) && batteryPercent <= 20 ? 'is-low-battery' : ''}`}
       onClick={handleClick}
       title="Robo"
       style={{

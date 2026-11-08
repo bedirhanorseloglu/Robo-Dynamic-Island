@@ -1910,6 +1910,8 @@ let bgGoogleWorker = null;
 let bgCalendarWorker = null;
 
 function startGoogleBackgroundWorker() {
+  // Mail is paused; leave the worker implementation below for later.
+  return;
   if (!localGoogleState || !localGoogleState.connected) return;
 
   const FIREFOX_UA =

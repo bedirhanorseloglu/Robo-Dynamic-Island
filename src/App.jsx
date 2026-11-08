@@ -462,6 +462,7 @@ export default function App() {
   const [now, setNow] = useState(new Date());
   const [batteryDelta] = useState(-10);
   const [batteryPercent, setBatteryPercent] = useState(80);
+  const [batteryAlertKind, setBatteryAlertKind] = useState('low');
   const [isCustomizingClock, setIsCustomizingClock] = useState(false);
   const [clockFontIndex, setClockFontIndex] = useState(() => {
     const value = Number(readClockPreferences().fontIndex);
@@ -972,13 +973,20 @@ export default function App() {
   // Read real Windows battery percentage and alert only at exactly 20%.
   useEffect(() => {
     let batteryObj = null;
+    let wasCharging = null;
 
     const triggerBatteryAlert = (pct) => {
       setBatteryPercent(pct);
+      setBatteryAlertKind('low');
       setIslandMode((current) => {
         if (current === 'expanded') return current;
         return 'battery';
       });
+    };
+
+    const triggerChargingAlert = () => {
+      setBatteryAlertKind('charging');
+      setIslandMode((current) => (current === 'expanded' ? current : 'battery'));
     };
 
     const handleBatteryChange = () => {
@@ -986,7 +994,15 @@ export default function App() {
       const nextPct = Math.round(batteryObj.level * 100);
       setBatteryPercent(nextPct);
 
-      if (batteryObj.charging || nextPct > 20) {
+      if (batteryObj.charging) {
+        if (wasCharging === false) triggerChargingAlert();
+        wasCharging = true;
+        hasShown20AlertRef.current = false;
+        return;
+      }
+      wasCharging = false;
+
+      if (nextPct > 20) {
         hasShown20AlertRef.current = false;
         return;
       }
@@ -1002,6 +1018,7 @@ export default function App() {
         .getBattery()
         .then((bat) => {
           batteryObj = bat;
+          wasCharging = Boolean(bat.charging);
           const pct = Math.round(bat.level * 100);
           if (pct > 0 && pct <= 100) {
             setBatteryPercent(pct);
@@ -1526,18 +1543,18 @@ export default function App() {
     window.twocode?.openSettingsWindow?.('apps');
   };
 
-  // All 11 bottom dock items
+  // Mail and Robo chat are temporarily disabled; keep their entries for later.
   const navItems = [
     { id: 'home', label: 'HOME', icon: Home },
     { id: 'code', label: 'AGENTS', icon: Terminal, badge: pendingApproval ? '!' : null },
     { id: 'music', label: 'MUSIC', icon: Music },
-    { id: 'robo', label: 'ROBO', icon: RoboDockIcon },
+    // { id: 'robo', label: 'ROBO', icon: RoboDockIcon },
     { id: 'timer', label: 'FOCUS', icon: Timer },
     { id: 'sleep', label: 'MODES', icon: Moon },
     { id: 'clips', label: 'CLIPS', icon: Copy },
     { id: 'notes', label: 'NOTE', icon: FileText },
     { id: 'cal', label: 'AGENDA', icon: Calendar },
-    { id: 'inbox', label: 'MAIL', icon: Mail },
+    // { id: 'inbox', label: 'MAIL', icon: Mail },
   ];
 
   const activeRecentJobs = useMemo(() => {
@@ -1561,7 +1578,12 @@ export default function App() {
       : 0;
   const remainingSec = Math.max(0, (currentMedia.duration || 0) - (currentMedia.position || 0));
 
-  const topEyeMood = activeTab === 'timer' ? 'focus-arc' : roboMood;
+  // Robo's eyes reflect the most relevant live state; low battery color has priority.
+  const topEyeMood = timerRunning || activeTab === 'timer'
+    ? 'focus-arc'
+    : activeTab === 'music' && currentMedia.hasSession && currentMedia.isPlaying
+    ? 'music'
+    : roboMood;
 
   const noteCheckItems = notesText
     .split('\n')
@@ -1616,7 +1638,7 @@ export default function App() {
     >
       <div
         ref={morphShellRef}
-        className={`notch-morph-shell state-${islandMode} mode-${activeTab} ${
+        className={`notch-morph-shell state-${islandMode} mode-${activeTab} ${batteryAlertKind === 'charging' ? 'is-charging' : ''} ${
           activeTab === 'home' && isCustomizingClock ? 'customizing-clock' : ''
         } ${musicAccent.hasColor ? 'has-cover-color' : ''}`}
         style={{
@@ -1664,7 +1686,7 @@ export default function App() {
             ============================================================ */}
         <div className={`morph-layer layer-idle ${islandMode === 'idle' ? 'is-visible' : ''}`}>
           <div className="idle-eyes-center">
-            <RoboEyes mood={roboMood} size="normal" />
+            <RoboEyes mood={topEyeMood} size="normal" batteryPercent={batteryPercent} />
           </div>
         </div>
 
@@ -1689,17 +1711,21 @@ export default function App() {
         {/* ============================================================
             COLLAPSED LAYER 2: LOW BATTERY ALERT NOTCH
             ============================================================ */}
-        <div className={`morph-layer layer-battery ${islandMode === 'battery' ? 'is-visible' : ''}`}>
+        <div className={`morph-layer layer-battery ${islandMode === 'battery' ? 'is-visible' : ''} ${batteryAlertKind === 'charging' ? 'is-charging' : ''}`}>
           <div className="battery-alert-icon">
             <svg width="24" height="14" viewBox="0 0 24 14" fill="none">
               <rect x="1" y="1" width="19" height="12" rx="3" stroke="#ffffff" strokeWidth="1.8" />
-              <rect x="4" y="4" width="2.5" height="6" rx="1" fill="#ffffff" />
+              {batteryAlertKind === 'charging' ? (
+                <path d="M12.7 2.8 8.2 7.5h3l-.5 3.7 4.6-5h-3l.4-3.4Z" fill="#ffffff" />
+              ) : (
+                <rect x="4" y="4" width="2.5" height="6" rx="1" fill="#ffffff" />
+              )}
               <path d="M22 4.5V9.5" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
           </div>
           <div className="battery-alert-text">
-            <strong>Only {batteryPercent}% battery left</strong>
-            <span>Plug in your charger!</span>
+            <strong>{batteryAlertKind === 'charging' ? `Charging · ${batteryPercent}%` : `Only ${batteryPercent}% battery left`}</strong>
+            <span>{batteryAlertKind === 'charging' ? 'Power connected' : 'Plug in your charger!'}</span>
           </div>
         </div>
 
@@ -2013,6 +2039,7 @@ export default function App() {
                 (activeTab !== 'code' && activeTab !== 'robo')) && (
                 <RoboEyes
                   mood={topEyeMood}
+                  batteryPercent={batteryPercent}
                   onPoke={(m) => {
                     setRoboMood(m);
                     playRoboSound(m, islandSettings.soundEffects !== false);
@@ -2252,13 +2279,13 @@ export default function App() {
               <div className="all-apps-grid">
                 {[
                   { id: 'music', label: 'Music', icon: Music, action: () => { setActiveTab('music'); setIslandOverlay(null); } },
-                  { id: 'robo', label: 'Robo', isRoboEyes: true, action: () => { setActiveTab('robo'); setIslandOverlay(null); } },
+                  // { id: 'robo', label: 'Robo', isRoboEyes: true, action: () => { setActiveTab('robo'); setIslandOverlay(null); } },
                   { id: 'code', label: 'Agents', icon: Terminal, action: () => { setActiveTab('code'); setIslandOverlay(null); } },
                   { id: 'timer', label: 'Focus', icon: Timer, action: () => { setActiveTab('timer'); setIslandOverlay(null); } },
                   { id: 'clips', label: 'Clipboard', icon: Copy, action: () => { setActiveTab('clips'); setIslandOverlay(null); } },
                   { id: 'notes', label: 'Note', icon: FileText, action: () => { setActiveTab('notes'); setIslandOverlay(null); } },
                   { id: 'cal', label: 'Calendar', icon: Calendar, action: () => { setActiveTab('cal'); setIslandOverlay(null); } },
-                  { id: 'inbox', label: 'Mail', icon: Mail, action: () => { setActiveTab('inbox'); setIslandOverlay(null); } },
+                  // { id: 'inbox', label: 'Mail', icon: Mail, action: () => { setActiveTab('inbox'); setIslandOverlay(null); } },
                   { id: 'mirror', label: 'Mirror', icon: Video, action: () => { setIslandOverlay('mirror'); } },
                   { id: 'settings', label: 'Settings', icon: Settings, action: () => { window.twocode?.openSettingsWindow?.('home'); setIslandOverlay(null); } },
                 ].map((appItem) => {

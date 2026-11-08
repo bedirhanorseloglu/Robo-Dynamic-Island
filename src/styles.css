@@ -130,6 +130,12 @@ body,
     #000000;
 }
 
+.notch-morph-shell.state-battery.is-charging {
+  background:
+    radial-gradient(ellipse 86% 78% at 50% 108%, rgba(39, 190, 125, 0.48) 0%, rgba(17, 100, 71, 0.28) 52%, #000000 84%),
+    #000000;
+}
+
 .notch-morph-shell.state-hud {
   width: 298px;
   height: 34px;
@@ -494,6 +500,15 @@ body,
   font-weight: 500;
   color: rgba(255, 215, 215, 0.66);
   letter-spacing: -0.01em;
+}
+
+.layer-battery.is-charging .battery-alert-icon {
+  background: #159b68;
+  box-shadow: 0 4px 14px rgba(21, 155, 104, 0.4);
+}
+
+.layer-battery.is-charging .battery-alert-text span {
+  color: rgba(187, 255, 220, 0.72);
 }
 
 /* =========================================================
@@ -1106,6 +1121,51 @@ body,
   100% {
     transform: translate(-1px, -1px) scale(0.9);
   }
+}
+
+/* Robo reacts to live device and app states; red low-battery color takes priority. */
+body .robo-eye.normal { --robo-eye-color: #ffffff; }
+body .robo-eye.focus-arc {
+  --robo-eye-color: #84aaff;
+  border-bottom-color: #84aaff;
+  box-shadow: 0 2px 8px rgba(132, 170, 255, 0.9);
+  animation: roboFocusPulse 1.8s ease-in-out infinite;
+}
+body .robo-eye.music {
+  --robo-eye-color: #6fe4d5;
+  animation: roboMusicBounce 620ms ease-in-out infinite alternate;
+}
+body .robo-eye.happy { animation: roboHappyPulse 1.2s ease-in-out infinite; }
+body .robo-eye.curious { animation: roboCuriousPulse 1.5s ease-in-out infinite; }
+body .robo-eye.sad { --robo-eye-color: #ff91ad; }
+body .robo-eyes-wrap.is-low-battery .robo-eye {
+  --robo-eye-color: #ff4d5e;
+  background: #ff4d5e !important;
+  border-bottom-color: #ff4d5e;
+  box-shadow: 0 0 9px rgba(255, 77, 94, 0.95), 0 0 18px rgba(255, 55, 75, 0.65) !important;
+  animation: batteryUrgentPulse 1.2s ease-in-out infinite;
+}
+body .robo-eyes-wrap.is-low-battery .robo-eye.focus-arc {
+  background: transparent !important;
+  border-bottom-color: #ff4d5e;
+}
+body .robo-eyes-wrap.is-low-battery .robo-heart-eye {
+  color: #ff4d5e;
+  text-shadow: 0 0 9px rgba(255, 77, 94, 0.95), 0 0 18px rgba(255, 55, 75, 0.65);
+}
+
+@keyframes roboFocusPulse { 0%, 100% { opacity: 0.72; } 50% { opacity: 1; } }
+@keyframes roboMusicBounce { from { height: 8px; filter: brightness(0.9); } to { height: 14px; filter: brightness(1.3); } }
+@keyframes roboHappyPulse { 0%, 100% { filter: brightness(0.92); } 50% { filter: brightness(1.3); } }
+@keyframes roboCuriousPulse { 0%, 100% { filter: brightness(0.9); } 50% { filter: brightness(1.2); } }
+@keyframes batteryUrgentPulse { 0%, 100% { filter: brightness(0.88); } 50% { filter: brightness(1.35); } }
+
+@media (prefers-reduced-motion: reduce) {
+  body .robo-eye.focus-arc,
+  body .robo-eye.music,
+  body .robo-eye.happy,
+  body .robo-eye.curious,
+  body .robo-eyes-wrap.is-low-battery .robo-eye { animation: none; }
 }
 
 .topbar-right {
