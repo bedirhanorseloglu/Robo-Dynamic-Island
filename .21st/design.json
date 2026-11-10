@@ -61,6 +61,31 @@
       "area": "notification history",
       "choice": "Use an icon-only bell beside the home top-bar menu; open a compact popover with per-item delete and clear-all actions.",
       "date": "2026-11-08"
+    },
+    {
+      "area": "Robo chat",
+      "choice": "Use a compact horizontal provider switcher above a full-width answer surface, and render model replies as safe Markdown blocks for readable paragraphs, lists, headings, quotes and code.",
+      "date": "2026-11-08"
+    },
+    {
+      "area": "Music player",
+      "choice": "Use an album-led two-column layout with a square cover, clear now-playing metadata, a readable timeline, centered transport controls, and a minimal empty state that fits the Dynamic Island.",
+      "date": "2026-11-10"
+    },
+    {
+      "area": "Home dashboard",
+      "choice": "Keep the large customizable clock and three functional summary cards, with restrained surfaces, softer contrast, clearer type hierarchy, and a calm blue-grey dock accent.",
+      "date": "2026-11-10"
+    },
+    {
+      "area": "Notification history",
+      "choice": "Use a quiet blue-grey bell accent, a spacious centered empty state, and subtle row surfaces while keeping the panel compact and preserving its existing actions.",
+      "date": "2026-11-10"
+    },
+    {
+      "area": "Agenda daily view",
+      "choice": "Keep the weekly date strip as the primary daily planner, with a clear blue-grey selected day, restrained event rows, and an intentional empty state; retain the month view as an alternate mode.",
+      "date": "2026-11-10"
     }
   ],
   "evidence": [

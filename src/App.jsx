@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import RealAppIcon from './RealAppIcon';
 import {
   Home,
@@ -48,7 +48,11 @@ import {
   Bot,
 } from 'lucide-react';
 import RoboEyes from './RoboEyes';
-import HeroClock from './HeroClock';
+import HeroClock, { CLOCK_FONT_FAMILIES } from './HeroClock';
+import { applyTypographyTokens, readTypographyPreferences, TYPOGRAPHY_STORAGE_KEY } from './typography';
+import NotificationText from './NotificationText';
+import AgendaCalendar from './AgendaCalendar';
+import RoboMarkdown from './RoboMarkdown';
 import { playRoboSound, playNotifSound } from './sounds';
 
 // Extract vibrant dominant RGB color from live album/video thumbnail
@@ -239,7 +243,7 @@ function NotificationAvatar({ banner, brand, presentation }) {
   const personAvatar = presentation.hasPerson;
 
   return (
-    <div className={`notif-toast-avatar ${personAvatar ? 'is-person-avatar' : ''} ${presentation.kind === 'audio' || presentation.kind === 'video' ? 'is-call-avatar' : ''}`}>
+    <div className={`notif-toast-avatar ${personAvatar ? 'is-person-avatar' : 'is-app-avatar'} ${presentation.kind === 'audio' || presentation.kind === 'video' ? 'is-call-avatar' : ''}`}>
       {profileImage ? (
         <>
           <span className="notif-toast-initials is-image-fallback">{initials || '?'}</span>
@@ -258,8 +262,9 @@ function NotificationAvatar({ banner, brand, presentation }) {
 }
 
 function NotifBrandIcon({ brand, logo }) {
-  if (logo && isSafeNotificationImage(logo)) {
-    return <img src={logo} alt="" className="notif-toast-app-logo" />;
+  const [logoFailed, setLogoFailed] = useState(false);
+  if (logo && isSafeNotificationImage(logo) && !logoFailed) {
+    return <img src={logo} alt="" className="notif-toast-app-logo" onError={() => setLogoFailed(true)} />;
   }
   if (brand === 'gmail') {
     return (
@@ -334,9 +339,6 @@ function NotifBrandIcon({ brand, logo }) {
   }
   if (brand === 'mail' || brand === 'outlook') {
     return <Mail size={19} strokeWidth={2.3} color="#ffffff" />;
-  }
-  if (logo) {
-    return <img src={logo} alt="" className="notif-toast-app-logo" />;
   }
   return <Bell size={18} strokeWidth={2.3} color="#ffffff" />;
 }
@@ -477,6 +479,7 @@ export default function App() {
   });
   const [clock24Hour, setClock24Hour] = useState(() => readClockPreferences().clock24Hour !== false);
   const [clockShowSeconds, setClockShowSeconds] = useState(() => readClockPreferences().showSeconds === true);
+  const [textFontIndex, setTextFontIndex] = useState(() => readTypographyPreferences().textFontIndex);
   const [showClockAdvanced, setShowClockAdvanced] = useState(false);
 
   useEffect(() => {
@@ -489,6 +492,26 @@ export default function App() {
       showSeconds: clockShowSeconds,
     }));
   }, [clockFontIndex, clockColor, userPickedClockColor, clockScale, clock24Hour, clockShowSeconds]);
+
+  useEffect(() => {
+    applyTypographyTokens({ textFontIndex, numberFontIndex: clockFontIndex });
+  }, [textFontIndex, clockFontIndex]);
+
+  useEffect(() => {
+    const syncTypography = (event) => {
+      if (event.key === TYPOGRAPHY_STORAGE_KEY) {
+        setTextFontIndex(readTypographyPreferences().textFontIndex);
+      }
+      if (event.key === 'twocode-clock-preferences' && event.newValue) {
+        try {
+          const value = Number(JSON.parse(event.newValue).fontIndex);
+          if (Number.isInteger(value) && value >= 0 && value < CLOCK_FONT_FAMILIES.length) setClockFontIndex(value);
+        } catch { /* Ignore malformed storage updates. */ }
+      }
+    };
+    window.addEventListener('storage', syncTypography);
+    return () => window.removeEventListener('storage', syncTypography);
+  }, []);
 
   // Live Windows Media (SMTC) state — NO mock track
   const [liveMedia, setLiveMedia] = useState({
@@ -517,6 +540,18 @@ export default function App() {
   const [selectedAiProvider, setSelectedAiProvider] = useState('Gemini');
   const [jobsToday, setJobsToday] = useState(0);
   const [roboMood, setRoboMood] = useState('normal');
+  const [roboReaction, setRoboReaction] = useState(null);
+  const [documentVisible, setDocumentVisible] = useState(() => document.visibilityState !== 'hidden');
+  const roboReactionRef = useRef(null);
+  const roboReactionTimerRef = useRef(null);
+  const roboReactionKeyRef = useRef(0);
+  const previousMediaRef = useRef(null);
+  const previousTabRef = useRef(activeTab);
+  const previousTimerRunningRef = useRef(timerRunning);
+  const previousTimerSecondsRef = useRef(timerSeconds);
+  const previousBatteryChargingRef = useRef(batteryCharging);
+  const previousBatteryLowRef = useRef(batteryPercent <= 20);
+  const previousClipboardIdRef = useRef(null);
   const [codexHistory, setCodexHistory] = useState([]);
   const [claudeHistory, setClaudeHistory] = useState([]);
   const [geminiHistory, setGeminiHistory] = useState([]);
@@ -529,6 +564,73 @@ export default function App() {
   const [roboReply, setRoboReply] = useState(null);
   const [roboReplyProvider, setRoboReplyProvider] = useState(null);
   const [roboLoading, setRoboLoading] = useState(false);
+
+  const triggerRoboReaction = useCallback((name, priority = 2, duration = 1250) => {
+    if (!name || document.visibilityState === 'hidden') return;
+    const current = roboReactionRef.current;
+    if (current && current.priority > priority && current.expiresAt > Date.now()) return;
+    if (roboReactionTimerRef.current) clearTimeout(roboReactionTimerRef.current);
+    const next = { name, priority, key: ++roboReactionKeyRef.current, expiresAt: Date.now() + duration };
+    roboReactionRef.current = next;
+    setRoboReaction(next);
+    roboReactionTimerRef.current = setTimeout(() => {
+      if (roboReactionRef.current?.key !== next.key) return;
+      roboReactionRef.current = null;
+      setRoboReaction(null);
+      roboReactionTimerRef.current = null;
+    }, duration);
+  }, []);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const visible = document.visibilityState !== 'hidden';
+      setDocumentVisible(visible);
+      if (!visible) {
+        if (roboReactionTimerRef.current) clearTimeout(roboReactionTimerRef.current);
+        roboReactionTimerRef.current = null;
+        roboReactionRef.current = null;
+        setRoboReaction(null);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (roboReactionTimerRef.current) clearTimeout(roboReactionTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (previousTabRef.current !== activeTab) {
+      previousTabRef.current = activeTab;
+      triggerRoboReaction('tab-change', 1, 850);
+    }
+  }, [activeTab, triggerRoboReaction]);
+
+  useEffect(() => {
+    if (timerRunning && !previousTimerRunningRef.current) {
+      triggerRoboReaction('focus-start', 2, 1100);
+    }
+    if (
+      !timerRunning && previousTimerRunningRef.current &&
+      previousTimerSecondsRef.current <= 1 && timerSeconds === focusMinutes * 60
+    ) {
+      triggerRoboReaction('focus-complete', 3, 1650);
+    }
+    previousTimerRunningRef.current = timerRunning;
+    previousTimerSecondsRef.current = timerSeconds;
+  }, [timerRunning, timerSeconds, focusMinutes, triggerRoboReaction]);
+
+  useEffect(() => {
+    if (batteryCharging && !previousBatteryChargingRef.current) {
+      triggerRoboReaction('charging', 4, 1450);
+    }
+    const isLow = batteryPercent <= 20 && !batteryCharging;
+    if (isLow && !previousBatteryLowRef.current) {
+      triggerRoboReaction('battery-low', 4, 1450);
+    }
+    previousBatteryChargingRef.current = batteryCharging;
+    previousBatteryLowRef.current = isLow;
+  }, [batteryCharging, batteryPercent, triggerRoboReaction]);
 
   // MODES tab state
   const [selectedModeName, setSelectedModeName] = useState(() => readModePreferences().selectedModeName);
@@ -678,11 +780,8 @@ export default function App() {
     setNotesText((current) => `${current}${current && !current.endsWith('\n') ? '\n' : ''}[ ] `);
   };
 
-  // AGENDA tab state — NO mock events
-  const [agendaViewMode, setAgendaViewMode] = useState('Day');
+  // Agenda event data is owned here; its calendar UI is isolated in AgendaCalendar.
   const [agendaItems, setAgendaItems] = useState([]);
-  const [addingAgenda, setAddingAgenda] = useState(false);
-  const [newAgendaTitle, setNewAgendaTitle] = useState('');
 
   // Real Google Data (Gmail & Calendar - Zero mock, Firebase Spark / Local-First optimized)
   const [googleData, setGoogleData] = useState(null);
@@ -720,6 +819,7 @@ export default function App() {
 
   const batteryTimerRef = useRef(null);
   const hudTimerRef = useRef(null);
+  const hudVisibleTimerRef = useRef(null);
   const notifTimerRef = useRef(null);
   const isShowingNotifToastRef = useRef(false);
   const hoverExpandTimerRef = useRef(null);
@@ -730,6 +830,7 @@ export default function App() {
     value: 68,
     muted: false,
   });
+  const [isSystemHudVisible, setIsSystemHudVisible] = useState(false);
   const [toastBanner, setToastBanner] = useState({
     app: 'Windows',
     appId: '',
@@ -1065,7 +1166,7 @@ export default function App() {
 
     }, 1000);
     return () => clearInterval(timer);
-  }, [timerRunning, focusMinutes, islandSettings.notifSound, islandSettings.soundEffects]);
+  }, [timerRunning, focusMinutes, islandSettings.notifSound, islandSettings.soundEffects, triggerRoboReaction]);
 
   // Connect to Electron IPC bridges
   useEffect(() => {
@@ -1118,23 +1219,24 @@ export default function App() {
       }
     });
 
-    window.twocode.getGoogleData?.().then((g) => {
-      if (g) {
-        setGoogleData(g);
-        if (g.mailCounts) setMailCounts({ ...g.mailCounts });
-        if (Array.isArray(g.agenda) && g.agenda.length > 0) {
-          setAgendaItems(g.agenda.map((a) => a.title));
-        }
-      }
-    });
+    // Mail is paused; keep its Google data wiring here for a later reactivation.
+    // window.twocode.getGoogleData?.().then((g) => {
+    //   if (g) {
+    //     setGoogleData(g);
+    //     if (g.mailCounts) setMailCounts({ ...g.mailCounts });
+    //   }
+    // });
+    // const unsubGoogle = window.twocode.onGoogleDataUpdate?.((g) => {
+    //   if (!g) return;
+    //   setGoogleData(g);
+    //   if (g.mailCounts) setMailCounts({ ...g.mailCounts });
+    // });
 
-    const unsubGoogle = window.twocode.onGoogleDataUpdate?.((g) => {
-      if (!g) return;
-      setGoogleData(g);
-      if (g.mailCounts) setMailCounts({ ...g.mailCounts });
-      if (Array.isArray(g.agenda) && g.agenda.length > 0) {
-        setAgendaItems(g.agenda.map((a) => a.title));
-      }
+    window.twocode.getAgendaEvents?.().then((events) => {
+      if (Array.isArray(events)) setAgendaItems(events);
+    });
+    const unsubAgenda = window.twocode.onAgendaEventsUpdate?.((events) => {
+      if (Array.isArray(events)) setAgendaItems(events);
     });
 
     window.twocode.getMediaStatus?.().then((m) => {
@@ -1159,14 +1261,34 @@ export default function App() {
     });
 
     const unsubMedia = window.twocode.onMediaUpdate((data) => {
+      const nextMedia = data || { hasSession: false, isPlaying: false };
+      const previousMedia = previousMediaRef.current;
+      if (previousMedia) {
+        if (nextMedia.isPlaying && !previousMedia.isPlaying) {
+          triggerRoboReaction('media-start', 2);
+        } else if (!nextMedia.isPlaying && previousMedia.isPlaying) {
+          triggerRoboReaction('media-pause', 2);
+        } else if (
+          nextMedia.isPlaying && previousMedia.isPlaying &&
+          nextMedia.title && nextMedia.title !== previousMedia.title
+        ) {
+          triggerRoboReaction('media-change', 2);
+        }
+      }
+      previousMediaRef.current = nextMedia;
       if (data && data.hasSession) {
         setShowMusicServicePicker(false);
       }
-      setLiveMedia(data || { hasSession: false });
+      setLiveMedia(nextMedia);
     });
 
     const unsubClip = window.twocode.onClipboardUpdate((list) => {
       if (Array.isArray(list)) {
+        const latestId = list[0]?.id ?? null;
+        if (latestId !== null && (previousClipboardIdRef.current === null || latestId !== previousClipboardIdRef.current)) {
+          triggerRoboReaction('clipboard', 1, 900);
+        }
+        previousClipboardIdRef.current = latestId;
         setClips(list);
       }
     });
@@ -1193,12 +1315,14 @@ export default function App() {
       if (ev.type === 'approval') {
         setPendingApproval(ev);
         setRoboMood('curious');
+        triggerRoboReaction('agent-approval', 3, 1500);
         setIslandMode('expanded');
         setActiveTab('code');
         playRoboSound('curious', true);
       } else if (ev.type === 'done') {
         setJobsToday((j) => j + 1);
         setRoboMood('happy');
+        triggerRoboReaction('success', 3, 1450);
         playNotifSound(islandSettings.notifSound || 'Ding', true);
         playRoboSound('happy', true);
       }
@@ -1220,6 +1344,9 @@ export default function App() {
         value: typeof hud.value === 'number' ? hud.value : 0,
         muted: Boolean(hud.muted),
       });
+      setIsSystemHudVisible(true);
+      if (hudVisibleTimerRef.current) clearTimeout(hudVisibleTimerRef.current);
+      hudVisibleTimerRef.current = setTimeout(() => setIsSystemHudVisible(false), 2100);
       setIslandMode((curr) => {
         if (curr === 'expanded') return curr;
         if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
@@ -1263,6 +1390,7 @@ export default function App() {
         islandSettings.soundEffects !== false
       );
       setRoboMood('surprised');
+      triggerRoboReaction('notification', 4, 1450);
       setTimeout(() => setRoboMood('normal'), 2600);
 
       const stayMs = Math.max(3000, (Number(islandSettings.notifDurationSec) || 5) * 1000);
@@ -1288,10 +1416,12 @@ export default function App() {
       if (unsubAgent) unsubAgent();
       if (unsubHud) unsubHud();
       if (unsubWinNotif) unsubWinNotif();
-      if (unsubGoogle) unsubGoogle();
+      // if (unsubGoogle) unsubGoogle(); // Mail is paused.
+      if (unsubAgenda) unsubAgenda();
     };
   }, [
     selectedAiProvider,
+    triggerRoboReaction,
     pendingApproval,
     resolvedCollapsedMode,
     isMiniProgressBar,
@@ -1342,10 +1472,16 @@ export default function App() {
     return { time, suffix: clock24Hour ? '' : hour < 12 ? 'AM' : 'PM' };
   };
 
-  const formatDateTop = (d) => {
+  const renderDateTop = (d, compact = false) => {
     const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-    return `${days[d.getDay()]} ${String(d.getDate()).padStart(2, '0')} ${months[d.getMonth()]}`;
+    return (
+      <span className={`topbar-date ${compact ? 'is-compact' : ''}`}>
+        <span className="topbar-date-weekday">{days[d.getDay()]}</span>
+        <span className="topbar-date-day clock-number-text">{d.getDate()}</span>
+        <span className="topbar-date-month">{months[d.getMonth()]}</span>
+      </span>
+    );
   };
 
   const formatHMS = (totalSec) => {
@@ -1375,6 +1511,7 @@ export default function App() {
   }, [now, timerSeconds]);
 
   const showBatteryPopup = () => {
+    setBatteryAlertKind('low');
     setIslandMode('battery');
     playRoboSound('surprised', islandSettings.soundEffects !== false);
   };
@@ -1474,6 +1611,7 @@ export default function App() {
     }
     setRoboLoading(true);
     setRoboMood('curious');
+    triggerRoboReaction('thinking', 3, 1800);
     playRoboSound('curious', islandSettings.soundEffects !== false);
     const timeStr = formatTimeHHMM(new Date());
     const entry = {
@@ -1500,6 +1638,7 @@ export default function App() {
       if (res.error) throw new Error(res.error);
       setRoboLoading(false);
       setRoboMood('happy');
+      triggerRoboReaction('success', 3, 1450);
       playRoboSound('happy', islandSettings.soundEffects !== false);
       setJobsToday((j) => j + 1);
       setRoboReply(res?.text || 'Cevap hazırlandı.');
@@ -1508,6 +1647,7 @@ export default function App() {
     } catch (err) {
       setRoboLoading(false);
       setRoboMood('sad');
+      triggerRoboReaction('error', 3, 1450);
       playRoboSound('sad', islandSettings.soundEffects !== false);
       setRoboReply(err?.message || 'Bir hata oluştu. Lütfen tekrar deneyin.');
       setRoboReplyProvider(selectedAiProvider);
@@ -1552,8 +1692,8 @@ export default function App() {
   // Mail and Robo chat are temporarily disabled; keep their entries for later.
   const navItems = [
     { id: 'home', label: 'HOME', icon: Home },
-    { id: 'code', label: 'AGENTS', icon: Terminal, badge: pendingApproval ? '!' : null },
     { id: 'music', label: 'MUSIC', icon: Music },
+    { id: 'code', label: 'AGENTS', icon: Terminal, badge: pendingApproval ? '!' : null },
     // { id: 'robo', label: 'ROBO', icon: RoboDockIcon },
     { id: 'timer', label: 'FOCUS', icon: Timer },
     { id: 'sleep', label: 'MODES', icon: Moon },
@@ -1587,7 +1727,7 @@ export default function App() {
   // Robo's eyes reflect the most relevant live state; low battery color has priority.
   const topEyeMood = timerRunning || activeTab === 'timer'
     ? 'focus-arc'
-    : activeTab === 'music' && currentMedia.hasSession && currentMedia.isPlaying
+    : currentMedia.hasSession && currentMedia.isPlaying
     ? 'music'
     : roboMood;
 
@@ -1608,7 +1748,6 @@ export default function App() {
   const currentMailFolder = MAIL_FOLDERS.find((folder) => folder.id === mailCategory) || MAIL_FOLDERS[0];
   const CurrentMailFolderIcon = currentMailFolder.icon;
   const mailIsConnected = Boolean(googleData?.connected || islandSettings.googleConnected);
-  const mailAccountLabel = googleData?.account || islandSettings.googleEmail || '';
   const latestMailItems = Array.isArray(googleData?.latestMails) ? googleData.latestMails : [];
   const visibleMailItems = latestMailItems.filter((item) => {
     const category = String(item.category || item.label || '').toLowerCase();
@@ -1624,10 +1763,19 @@ export default function App() {
     setNotificationHistory((items) => items.map((item) => ({ ...item, isRead: true })));
     setNotificationHistoryOpen((open) => !open);
   };
+  const handleAddAgendaEvent = (event) => {
+    if (!event?.title || !event?.time) return;
+    window.twocode?.addAgendaEvent?.(event);
+  };
+  const handleDeleteAgendaEvent = (eventId) => {
+    setAgendaItems((items) => items.filter((event) => String(event.id) !== String(eventId)));
+    window.twocode?.deleteAgendaEvent?.(eventId);
+  };
 
   return (
     <div
       className="notch-stage"
+      style={{ '--clock-number-font': CLOCK_FONT_FAMILIES[clockFontIndex] || CLOCK_FONT_FAMILIES[3] }}
       onContextMenu={handleNotchContextMenu}
       onMouseMove={(e) => {
         if (isDraggingRuler && activeTab === 'timer') {
@@ -1692,7 +1840,14 @@ export default function App() {
             ============================================================ */}
         <div className={`morph-layer layer-idle ${islandMode === 'idle' ? 'is-visible' : ''}`}>
           <div className="idle-eyes-center">
-            <RoboEyes mood={topEyeMood} size="normal" batteryPercent={batteryPercent} batteryCharging={batteryCharging} />
+            <RoboEyes
+              mood={topEyeMood}
+              reaction={roboReaction}
+              active={documentVisible && islandMode === 'idle'}
+              size="normal"
+              batteryPercent={batteryPercent}
+              batteryCharging={batteryCharging}
+            />
           </div>
         </div>
 
@@ -1730,7 +1885,13 @@ export default function App() {
             </svg>
           </div>
           <div className="battery-alert-text">
-            <strong>{batteryAlertKind === 'charging' ? `Charging · ${batteryPercent}%` : `Only ${batteryPercent}% battery left`}</strong>
+            <strong>
+              {batteryAlertKind === 'charging' ? (
+                <>Charging · <span className="clock-number-text">{batteryPercent}%</span></>
+              ) : (
+                <>Only <span className="clock-number-text">{batteryPercent}%</span> battery left</>
+              )}
+            </strong>
             <span>{batteryAlertKind === 'charging' ? 'Power connected' : 'Plug in your charger!'}</span>
           </div>
         </div>
@@ -1738,7 +1899,7 @@ export default function App() {
         {/* ============================================================
             COLLAPSED LAYER 2B: SYSTEM VOLUME / BRIGHTNESS HUD NOTCH
             ============================================================ */}
-        <div className={`morph-layer layer-hud ${islandMode === 'hud' ? 'is-visible' : ''}`}>
+        <div className={`morph-layer layer-hud ${islandMode === 'hud' || isSystemHudVisible ? 'is-visible' : ''}`}>
           <div className="hud-notch-icon">
             {hudOverlay.type === 'brightness' ? (
               <Sun size={17} strokeWidth={2.2} />
@@ -1748,6 +1909,7 @@ export default function App() {
               <Volume2 size={17} strokeWidth={2.2} />
             )}
           </div>
+          <span className="hud-notch-label">{hudOverlay.type === 'brightness' ? 'Parlaklık' : 'Ses'}</span>
           <div className="hud-notch-track">
             <div
               className={`hud-notch-fill ${hudOverlay.type === 'brightness' ? 'is-brightness' : ''}`}
@@ -1757,7 +1919,7 @@ export default function App() {
             />
           </div>
           <span className="hud-notch-val">
-            {hudOverlay.muted ? 'Mute' : `${Math.round(hudOverlay.value)}%`}
+            {hudOverlay.muted ? 'Sessiz' : `${Math.round(hudOverlay.value)}%`}
           </span>
         </div>
 
@@ -1776,8 +1938,8 @@ export default function App() {
           <NotificationAvatar banner={toastBanner} brand={notifBrand.brand} presentation={notifPresentation} />
           <div className="notif-toast-content">
             <small className="notif-toast-app-name">{notifPresentation.app}</small>
-            <strong>{notifPresentation.title}</strong>
-            <span>{notifPresentation.subtitle || notifPresentation.app}</span>
+            <strong><NotificationText text={notifPresentation.title} /></strong>
+            <span><NotificationText text={notifPresentation.subtitle || notifPresentation.app} /></span>
           </div>
         </div>
 
@@ -1852,14 +2014,6 @@ export default function App() {
             islandMode === 'expanded' ? 'is-visible' : ''
           }`}
         >
-          {/* Full-bleed left album art with dynamic cover color glow when on MUSIC tab */}
-          {activeTab === 'music' && !islandOverlay && currentMedia.thumbnail && (
-            <div className="music-fullbleed-art">
-              <img src={currentMedia.thumbnail} alt="" />
-              <div className="music-fullbleed-gradient" />
-            </div>
-          )}
-
           {/* TOP STATUS BAR */}
           <header className="island-topbar">
             <div className="topbar-left">
@@ -1913,7 +2067,7 @@ export default function App() {
                       </button>
                     </div>
                   )}
-                  <span className="topbar-date">{formatDateTop(now)}</span>
+                  {renderDateTop(now)}
                 </>
               )}
             </div>
@@ -2041,10 +2195,12 @@ export default function App() {
             )}
 
             <div className="topbar-center">
-              {(islandOverlay ||
+              {(islandOverlay || roboReaction ||
                 (activeTab !== 'code' && activeTab !== 'robo')) && (
                 <RoboEyes
                   mood={topEyeMood}
+                  reaction={roboReaction}
+                  active={documentVisible && (islandMode === 'expanded' || Boolean(roboReaction))}
                   batteryPercent={batteryPercent}
                   batteryCharging={batteryCharging}
                   onPoke={(m) => {
@@ -2249,7 +2405,7 @@ export default function App() {
                 <header className="notification-history-header">
                   <div className="notification-history-heading">
                     <span className="notification-history-icon"><Bell size={15} /></span>
-                    <div><strong>Bildirim geçmişi</strong><span>{notificationHistory.length} kayıt</span></div>
+                    <div><strong>Bildirim geçmişi</strong><span><span className="clock-number-text">{notificationHistory.length}</span> kayıt</span></div>
                   </div>
                   <div className="notification-history-actions">
                     <button className="notification-history-clear" type="button" onClick={() => setNotificationHistory([])} disabled={!notificationHistory.length}>Tümünü sil</button>
@@ -2261,7 +2417,7 @@ export default function App() {
                     <div className="notification-history-item" key={item.id}>
                       <button type="button" className="notification-history-open" onClick={() => openNotification(item)} aria-label={`${item.app || 'Uygulama'} bildirimini aç`}>
                         <NotificationAvatar banner={item} brand={resolveNotifBrand(item).brand} presentation={resolveNotificationPresentation(item)} />
-                        <span className="notification-history-copy"><strong>{item.title || item.app}</strong><span>{item.body || item.app}</span><small>{item.app} · {new Date(item.timestamp).toLocaleString('tr-TR')}</small></span>
+                        <span className="notification-history-copy"><strong><NotificationText text={item.title || item.app} /></strong><span><NotificationText text={item.body || item.app} /></span><small>{item.app} · <time className="clock-number-text">{new Date(item.timestamp).toLocaleString('tr-TR')}</time></small></span>
                       </button>
                       <button type="button" className="notification-history-delete" aria-label="Bildirimi sil" title="Bildirimi sil" onClick={() => setNotificationHistory((items) => items.filter((entry) => entry.id !== item.id))}>
                         <Trash2 size={15} />
@@ -2330,7 +2486,8 @@ export default function App() {
                     className="all-apps-cell"
                     onClick={() => {
                       playRoboSound('tap', islandSettings.soundEffects !== false);
-                      window.twocode?.openExternal(sc.url);
+                      triggerRoboReaction('app-open', 2, 1050);
+                      window.twocode?.openApp(sc);
                       setIslandOverlay(null);
                     }}
                   >
@@ -2384,7 +2541,7 @@ export default function App() {
                         <div className="mini-bento-preview">
                           <div className="mb-box">
                             <small>FOCUS</small>
-                            <strong>25:00</strong>
+                            <strong className="clock-number-text">25:00</strong>
                           </div>
                           <div className="mb-box">
                             <small>ROBO</small>
@@ -2407,7 +2564,7 @@ export default function App() {
                         onClick={() => setIslandOverlay(null)}
                       >
                         <div className="cc-topbar">
-                          <span>{formatDateTop(now)}</span>
+                          {renderDateTop(now, true)}
                           <div className="cc-eyes">
                             <i />
                             <i />
@@ -2440,7 +2597,7 @@ export default function App() {
                               </div>
                               <div className="cc-mini-card">
                                 <div>
-                                  <strong>25:00</strong>
+                                  <strong className="clock-number-text">25:00</strong>
                                   <small>Focus, ready</small>
                                 </div>
                               </div>
@@ -2456,7 +2613,7 @@ export default function App() {
                             </div>
                             <div className="mb-box">
                               <small>FOCUS</small>
-                              <strong>25:00</strong>
+                              <strong className="clock-number-text">25:00</strong>
                             </div>
                             <div className="mb-box">
                               <small>ROBO</small>
@@ -2558,13 +2715,14 @@ export default function App() {
                                   { idx: 2, cls: 'font-editorial' },
                                   { idx: 3, cls: 'font-mono-dot' },
                                   { idx: 4, cls: 'font-script' },
-                                ].map((f) => (
+                                  ].map((f) => (
                                   <button
                                     key={f.idx}
                                     type="button"
                                     className={`font-preview-pill ${f.cls} ${
                                       clockFontIndex === f.idx ? 'is-selected' : ''
                                     }`}
+                                      style={{ fontFamily: CLOCK_FONT_FAMILIES[f.idx] }}
                                     onClick={() => setClockFontIndex(f.idx)}
                                   >
                                     12
@@ -2951,22 +3109,23 @@ export default function App() {
                         ============================================================ */}
                     {activeTab === 'music' && (
                       <div className="music-view">
-                        <div className="music-spacer-left">
-                          {!currentMedia.thumbnail && (
-                            <div className="music-no-cover-box">
-                              <Music size={34} />
-                            </div>
-                          )}
+                        <div className="music-art-column">
+                          <div className={`music-cover-art ${currentMedia.thumbnail ? 'has-art' : ''}`}>
+                            {currentMedia.thumbnail ? (
+                              <img src={currentMedia.thumbnail} alt={`${currentMedia.title} albüm kapağı`} />
+                            ) : (
+                              <Music size={38} strokeWidth={1.8} aria-hidden="true" />
+                            )}
+                          </div>
                         </div>
                         <div className="music-right-panel">
-                          <div className="music-track-header">
-                            <span className="music-track-title">{currentMedia.title}</span>
-                            {currentMedia.artist && (
-                              <>
-                                <span className="music-track-dot"> · </span>
-                                <span className="music-track-artist">{currentMedia.artist}</span>
-                              </>
-                            )}
+                          <div className="music-track-header" aria-live="polite">
+                            <span className={`music-status-dot ${currentMedia.isPlaying ? 'is-playing' : ''}`} />
+                            <span>{currentMedia.hasSession ? 'NOW PLAYING' : 'Nothing playing'}</span>
+                            <span className="music-track-dot">·</span>
+                            <span className="music-track-artist">
+                              {currentMedia.hasSession ? (currentMedia.artist || currentMedia.album || 'Playing on this PC') : 'Play music or a video'}
+                            </span>
                           </div>
 
                           <div className="music-lyrics-box">
@@ -2984,7 +3143,14 @@ export default function App() {
                             <span className="music-time-label">
                               {formatMMSS(currentMedia.position)}
                             </span>
-                            <div className="music-scrubber-track">
+                            <div
+                              className="music-scrubber-track"
+                              role="progressbar"
+                              aria-label="Parça ilerlemesi"
+                              aria-valuemin={0}
+                              aria-valuemax={currentMedia.duration || 0}
+                              aria-valuenow={currentMedia.position || 0}
+                            >
                               <div
                                 className="music-scrubber-fill"
                                 style={{ width: `${progressPercent}%` }}
@@ -3038,6 +3204,8 @@ export default function App() {
                                   type="button"
                                   className="transport-icon-btn"
                                   onClick={handlePrev}
+                                  aria-label="Önceki parça"
+                                  title="Önceki parça"
                                 >
                                   <SkipBack size={18} fill="#ffffff" />
                                 </button>
@@ -3045,6 +3213,8 @@ export default function App() {
                                   type="button"
                                   className="transport-play-circle"
                                   onClick={handlePlayPause}
+                                  aria-label={currentMedia.isPlaying ? 'Duraklat' : currentMedia.hasSession ? 'Oynat' : 'Müzik uygulaması seç'}
+                                  title={currentMedia.isPlaying ? 'Duraklat' : currentMedia.hasSession ? 'Oynat' : 'Müzik uygulaması seç'}
                                 >
                                   {currentMedia.isPlaying ? (
                                     <Pause size={18} fill="#050506" strokeWidth={2.5} />
@@ -3061,6 +3231,8 @@ export default function App() {
                                   type="button"
                                   className="transport-icon-btn"
                                   onClick={handleNext}
+                                  aria-label="Sonraki parça"
+                                  title="Sonraki parça"
                                 >
                                   <SkipForward size={18} fill="#ffffff" />
                                 </button>
@@ -3129,15 +3301,11 @@ export default function App() {
                     {activeTab === 'robo' && (
                       <div className="robo-ask-view">
                         <div className="robo-chat-layout">
-                          <aside className="robo-model-sidebar" aria-label="AI modelleri">
-                            <div className="robo-model-sidebar-title">
-                              <strong>Modeller</strong>
-                              <span>Yanıt sağlayıcısı</span>
-                            </div>
+                          <nav className="robo-model-switcher" aria-label="Yanıt modelini seç">
                             {[
-                              { name: 'Claude', brand: 'Anthropic', accent: '#d97757' },
-                              { name: 'Codex', brand: 'OpenAI', accent: '#b8c5d2' },
-                              { name: 'Gemini', brand: 'Google', accent: '#9a8cff' },
+                              { name: 'Claude', accent: '#d97757' },
+                              { name: 'Codex', accent: '#b8c5d2' },
+                              { name: 'Gemini', accent: '#9a8cff' },
                             ].map((model) => (
                               <button
                                 key={model.name}
@@ -3148,28 +3316,18 @@ export default function App() {
                                 aria-pressed={selectedAiProvider === model.name}
                               >
                                 <span className="robo-model-logo"><AiProviderLogo provider={model.name} size={18} /></span>
-                                <span className="robo-model-name"><strong>{model.name}</strong><small>{model.brand}</small></span>
-                                {selectedAiProvider === model.name && <i className="robo-model-selected-dot" />}
+                                <span className="robo-model-name"><strong>{model.name}</strong></span>
                               </button>
                             ))}
-                          </aside>
+                          </nav>
 
                           <div className="robo-chat-main">
-                            <header className="robo-chat-header">
-                              <div><strong>{roboReply ? 'Yanıtın' : 'Robo’ya sor'}</strong><span>{roboLoading ? 'Yanıt hazırlanıyor…' : roboReply ? 'Cevap sağ panelde hazır' : 'Sorunu yaz, cevabın burada görünsün'}</span></div>
-                              <span className="robo-current-provider" style={{ '--provider-accent': (roboReply && roboReplyProvider ? roboReplyProvider : selectedAiProvider) === 'Claude' ? '#d97757' : (roboReply && roboReplyProvider ? roboReplyProvider : selectedAiProvider) === 'Gemini' ? '#9a8cff' : '#b8c5d2' }}>
-                                <AiProviderLogo provider={roboReply && roboReplyProvider ? roboReplyProvider : selectedAiProvider} size={15} />
-                                {roboReply && roboReplyProvider ? roboReplyProvider : selectedAiProvider}
-                              </span>
-                            </header>
-
                             <section className={`robo-answer-card ${roboLoading ? 'is-loading' : ''}`} aria-live="polite" aria-busy={roboLoading}>
                               {roboReply ? (
                                 <>
                                   <div className="robo-answer-header">
                                     <div className="robo-answer-provider">
-                                      <AiProviderLogo provider={roboReplyProvider || selectedAiProvider} size={16} />
-                                      <span>{roboReplyProvider || selectedAiProvider} yanıtı</span>
+                                      <span>Yanıt</span>
                                     </div>
                                     <div className="robo-answer-actions">
                                       <button type="button" className="robo-ans-btn" onClick={() => { window.twocode?.copyText(roboReply); playRoboSound('tap', islandSettings.soundEffects !== false); }} title="Cevabı kopyala">
@@ -3178,12 +3336,12 @@ export default function App() {
                                       <button type="button" className="robo-ans-btn close" onClick={() => setRoboReply(null)} title="Cevabı kapat" aria-label="Cevabı kapat"><X size={14} /></button>
                                     </div>
                                   </div>
-                                  <div className="robo-answer-body">{roboReply}</div>
+                                  <div className="robo-answer-body"><RoboMarkdown content={roboReply} /></div>
                                 </>
                               ) : roboLoading ? (
-                                <div className="robo-answer-empty is-thinking"><span className="robo-answer-empty-icon"><Bot size={18} /></span><strong>Robo düşünüyor…</strong><span>Yanıt hazır olunca burada görünecek.</span></div>
+                                <div className="robo-answer-empty is-thinking"><span className="robo-answer-empty-icon"><Bot size={18} /></span><strong>Yanıt hazırlanıyor</strong></div>
                               ) : (
-                                <div className="robo-answer-empty"><span className="robo-answer-empty-icon"><Bot size={18} /></span><strong>Yanıt alanı</strong><span>Bir soru gönderdiğinde cevabın burada açılacak.</span></div>
+                                <div className="robo-answer-empty"><span className="robo-answer-empty-icon"><Bot size={18} /></span><strong>Yanıtın burada görünecek</strong></div>
                               )}
                             </section>
 
@@ -3217,7 +3375,7 @@ export default function App() {
                           <div className="focus-time-col">
                             <HeroClock
                               timeStr={formatTimerBig(timerSeconds)}
-                              fontIndex={3}
+                              fontIndex={clockFontIndex}
                               color="#ffffff"
                               size="focus"
                             />
@@ -3449,7 +3607,7 @@ export default function App() {
                               <span className="note-eyebrow">NOTE</span>
                               <span className="note-save-hint">Otomatik kaydedilir</span>
                             </div>
-                            <span className="note-character-count">{notesText.length} karakter</span>
+                            <span className="note-character-count"><span className="clock-number-text">{notesText.length}</span> karakter</span>
                           </div>
                           <textarea
                             className="note-clean-input"
@@ -3505,102 +3663,20 @@ export default function App() {
                         10. AGENDA TAB
                         ============================================================ */}
                     {activeTab === 'cal' && (
-                      <div className="agenda-tab-view">
-                        <div className="agenda-top-row">
-                          <div className="agenda-title-group">
-                            <span className="agenda-eyebrow">TODAY</span>
-                            {addingAgenda ? (
-                              <input
-                                type="text"
-                                className="agenda-inline-input"
-                                placeholder="Add event title & press Enter..."
-                                autoFocus
-                                value={newAgendaTitle}
-                                onChange={(e) => setNewAgendaTitle(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' && newAgendaTitle.trim()) {
-                                    const title = newAgendaTitle.trim();
-                                    setAgendaItems((prev) => [...prev, title]);
-                                    setNewAgendaTitle('');
-                                    setAddingAgenda(false);
-                                    const now = new Date();
-                                    const eventTime = formatTimeHHMM(new Date(now.getTime() + 15 * 60 * 1000));
-                                    window.twocode?.addAgendaEvent?.({
-                                      title,
-                                      date: 'Bugün',
-                                      time: eventTime,
-                                    });
-                                  } else if (e.key === 'Escape') {
-                                    setAddingAgenda(false);
-                                  }
-                                }}
-                              />
-                            ) : (
-                              <h2 className="agenda-main-heading">
-                                {agendaItems.length > 0
-                                  ? agendaItems[agendaItems.length - 1]
-                                  : 'Nothing planned'}
-                              </h2>
-                            )}
-                          </div>
-
-                          <div className="agenda-controls-right">
-                            <div className="agenda-day-month-pill">
-                              <button
-                                type="button"
-                                className={`dm-btn ${agendaViewMode === 'Day' ? 'active' : ''}`}
-                                onClick={() => setAgendaViewMode('Day')}
-                              >
-                                Day
-                              </button>
-                              <button
-                                type="button"
-                                className={`dm-btn ${agendaViewMode === 'Month' ? 'active' : ''}`}
-                                onClick={() => setAgendaViewMode('Month')}
-                              >
-                                Month
-                              </button>
-                            </div>
-
-                            <button
-                              type="button"
-                              className="agenda-plus-circle"
-                              onClick={() => setAddingAgenda((a) => !a)}
-                              title="Add event"
-                            >
-                              <Plus size={16} strokeWidth={2.5} color="#000000" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="agenda-timeline-wrap">
-                          <div className="agenda-ticks-row">
-                            {Array.from({ length: 13 }, (_, i) => (
-                              <span key={i} className="agenda-tick" />
-                            ))}
-                          </div>
-                          <div className="agenda-hours-row">
-                            <span>08:00</span>
-                            <span>12:00</span>
-                            <span>16:00</span>
-                            <span>20:00</span>
-                          </div>
-                        </div>
-
-                        {(islandSettings.googleConnected || googleData?.connected) && (islandSettings.googleEmail || googleData?.account) && (
-                          <div className="agenda-footer-email">{islandSettings.googleEmail || googleData?.account}</div>
-                        )}
-                      </div>
+                      <AgendaCalendar
+                        events={agendaItems}
+                        onAddEvent={handleAddAgendaEvent}
+                        onDeleteEvent={handleDeleteAgendaEvent}
+                      />
                     )}
-
                     {/* ============================================================
                         11. MAIL TAB
                         ============================================================ */}
                     {activeTab === 'inbox' && (
                       <div className="mail-workspace">
-                        <aside className="mail-sidebar" aria-label="Posta klasörleri">
-                          <div className="mail-sidebar-heading"><span>MAILBOX</span><strong>Posta kutusu</strong></div>
-                          <nav className="mail-folder-list">
+                        <section className="mail-main-panel">
+                          <header className="mail-main-header">
+                            <nav className="mail-folder-list" aria-label="Posta kategorileri">
                             {MAIL_FOLDERS.map((folder) => {
                               const FolderIcon = folder.icon;
                               const count = Number(mailCounts[folder.countKey]) || 0;
@@ -3612,24 +3688,14 @@ export default function App() {
                                 </button>
                               );
                             })}
-                          </nav>
-                          <div className={`mail-connection-state ${mailIsConnected ? 'connected' : ''}`}><i />{mailIsConnected ? 'Gmail bağlı' : 'Gmail bağlı değil'}</div>
-                          {mailAccountLabel && <span className="mail-account-label" title={mailAccountLabel}>{mailAccountLabel}</span>}
-                        </aside>
-
-                        <section className="mail-main-panel">
-                          <header className="mail-main-header">
-                            <div className="mail-title-block">
-                              <div className="mail-title-icon"><CurrentMailFolderIcon size={17} /></div>
-                              <div><h2>{currentMailFolder.label}</h2><span>{mailCounts[currentMailFolder.countKey] || 0} okunmamış ileti</span></div>
-                            </div>
+                            </nav>
                             <div className="mail-header-actions">
-                              <button type="button" className="mail-open-gmail" onClick={() => window.twocode?.openExternal(currentMailFolder.url)}><ExternalLink size={13} /><span>Gmail’i aç</span></button>
-                              <button type="button" className="mail-compose-btn" title="Yeni e-posta" aria-label="Yeni e-posta yaz" onClick={() => window.twocode?.openExternal('https://mail.google.com/mail/u/0/#compose')}><Plus size={16} /><span>Yaz</span></button>
+                              <span className={`mail-connection-state ${mailIsConnected ? 'connected' : ''}`} title={mailIsConnected ? 'Gmail bağlı' : 'Gmail bağlı değil'} aria-label={mailIsConnected ? 'Gmail bağlı' : 'Gmail bağlı değil'}><i /></span>
+                              <button type="button" className="mail-open-gmail" title="Gmail’i aç" aria-label="Gmail’i aç" onClick={() => window.twocode?.openExternal(currentMailFolder.url)}><ExternalLink size={15} /></button>
+                              <button type="button" className="mail-compose-btn" title="Yeni e-posta yaz" aria-label="Yeni e-posta yaz" onClick={() => window.twocode?.openExternal('https://mail.google.com/mail/u/0/#compose')}><Plus size={17} /></button>
                             </div>
                           </header>
 
-                          <div className="mail-list-heading"><span>{mailCategory === 'primary' ? 'Son iletiler' : `${currentMailFolder.label} iletileri`}</span><span>{visibleMailItems.length} ileti</span></div>
                           <div className="mail-message-list">
                             {visibleMailItems.length > 0 ? visibleMailItems.map((item, index) => {
                               const sender = item.from || item.sender || 'Gönderen bilinmiyor';
@@ -3637,20 +3703,23 @@ export default function App() {
                               const hasThreadId = Boolean(mailId && !/^(m_|mail_count_bump|row_)/i.test(mailId));
                               const messageUrl = hasThreadId ? `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(mailId)}` : currentMailFolder.url;
                               return (
-                                <button key={mailId || `${sender}-${item.subject}-${index}`} type="button" className="mail-message-row" onClick={() => window.twocode?.openExternal(messageUrl)}>
+                                <button key={mailId || `${sender}-${item.subject}-${index}`} type="button" className="mail-message-row" aria-label={`${sender}: ${item.subject || 'Konu yok'}`} onClick={() => window.twocode?.openExternal(messageUrl)}>
                                   <span className="mail-sender-avatar">
                                     {(item.senderPhoto || item.profileImage) ? <img src={item.senderPhoto || item.profileImage} alt="" onError={(event) => { event.currentTarget.style.display = 'none'; }} /> : sender.trim().charAt(0).toLocaleUpperCase('tr-TR')}
                                   </span>
-                                  <span className="mail-message-copy"><strong>{sender}</strong><span>{item.subject || 'Konu yok'}</span><small>{item.snippet || 'İçeriği Gmail’de görüntüle'}</small></span>
-                                  <span className="mail-message-meta"><time>{item.time || 'Bugün'}</time><ExternalLink size={12} /></span>
+                                  <span className="mail-message-copy">
+                                    <span className="mail-message-topline"><strong>{sender}</strong><time className="clock-number-text">{item.time || 'Bugün'}</time></span>
+                                    <span className="mail-message-subject">{item.subject || 'Konu yok'}</span>
+                                    <small>{item.snippet || ' '}</small>
+                                  </span>
+                                  <ExternalLink className="mail-message-open-icon" size={13} />
                                 </button>
                               );
                             }) : (
                               <div className="mail-empty-state">
                                 <span className="mail-empty-icon"><CurrentMailFolderIcon size={18} /></span>
-                                <strong>{!mailIsConnected ? 'Gmail bağlantısı gerekli' : mailCategory !== 'primary' ? 'Kategori iletileri Gmail’de' : 'Gelen kutusu sakin'}</strong>
-                                <span>{!mailIsConnected ? 'Gmail’i bağlayınca son iletiler burada görünür.' : mailCategory !== 'primary' ? 'Bu kategori için Gmail’deki ileti listesine geçebilirsiniz.' : 'Yeni iletiler geldiğinde bu listede görünecek.'}</span>
-                                {!mailIsConnected ? <button type="button" onClick={() => window.twocode?.openSettingsWindow?.('connections')}>Gmail’i bağla</button> : mailCategory !== 'primary' ? <button type="button" onClick={() => window.twocode?.openExternal(currentMailFolder.url)}>Gmail’de görüntüle <ExternalLink size={12} /></button> : null}
+                                <strong>{!mailIsConnected ? 'Gmail’i bağla' : mailCategory !== 'primary' ? 'Bu klasörde ileti yok' : 'Gelen kutusu boş'}</strong>
+                                {!mailIsConnected ? <button type="button" onClick={() => window.twocode?.openSettingsWindow?.('connections')} aria-label="Gmail’i bağla"><ExternalLink size={14} /></button> : mailCategory !== 'primary' ? <button type="button" onClick={() => window.twocode?.openExternal(currentMailFolder.url)} aria-label="Gmail’de görüntüle"><ExternalLink size={14} /></button> : null}
                               </div>
                             )}
                           </div>
@@ -3670,7 +3739,10 @@ export default function App() {
                       type="button"
                       className="shortcut-brand-btn"
                       title={sc.name}
-                      onClick={() => window.twocode?.openExternal(sc.url)}
+                      onClick={() => {
+                        triggerRoboReaction('app-open', 2, 1050);
+                        window.twocode?.openApp(sc);
+                      }}
                     >
                       <RealAppIcon sc={sc} size={15} />
                     </button>

@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('twocode', {
   },
   copyText: (text) => ipcRenderer.invoke('copy-text', text),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  openApp: (target) => ipcRenderer.invoke('open-app', target),
   openNotificationTarget: (target) => ipcRenderer.invoke('open-notification-target', target),
   captureScreen: () => ipcRenderer.invoke('capture-screen'),
   getSystemStats: () => ipcRenderer.invoke('get-system-stats'),
@@ -80,6 +81,13 @@ contextBridge.exposeInMainWorld('twocode', {
   scanBluetoothDevices: () => ipcRenderer.invoke('scan-bluetooth-devices'),
   pairBluetoothDevice: (deviceId) => ipcRenderer.invoke('pair-bluetooth-device', deviceId),
   addAgendaEvent: (evt) => ipcRenderer.invoke('add-agenda-event', evt),
+  getAgendaEvents: () => ipcRenderer.invoke('get-agenda-events'),
+  deleteAgendaEvent: (eventId) => ipcRenderer.invoke('delete-agenda-event', eventId),
+  onAgendaEventsUpdate: (cb) => {
+    const listener = (_event, agenda) => cb(agenda);
+    ipcRenderer.on('local-agenda-update', listener);
+    return () => ipcRenderer.removeListener('local-agenda-update', listener);
+  },
   getFileIcon: (filePath) => ipcRenderer.invoke('get-file-icon', filePath),
   testMailNotif: () => ipcRenderer.invoke('test-mail-notif'),
   testAgendaNotif: () => ipcRenderer.invoke('test-agenda-notif'),

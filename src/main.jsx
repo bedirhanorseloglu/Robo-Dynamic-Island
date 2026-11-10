@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import SettingsApp from './SettingsApp';
 import './styles.css';
+import './typography.css';
+import { initializeTypography } from './typography';
+
+initializeTypography();
 
 window.addEventListener('error', (event) => {
   console.error('[CRITICAL WINDOW ERROR]', event.message, event.filename, event.lineno, event.error?.stack);

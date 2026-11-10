@@ -1,12 +1,6 @@
 import React from 'react';
-
-const FONT_FAMILIES = [
-  "'Playfair Display', Georgia, serif",
-  "'Oswald', sans-serif",
-  "'Cormorant Garamond', Georgia, serif",
-  "'JetBrains Mono', monospace",
-  "'Caveat', cursive",
-];
+import { CLOCK_FONT_FAMILIES } from './typography';
+export { CLOCK_FONT_FAMILIES } from './typography';
 
 export default function HeroClock({
   timeStr = '04:24',
@@ -18,7 +12,7 @@ export default function HeroClock({
   size = 'hero',
 }) {
   const chars = timeStr.split('');
-  const fontFamily = FONT_FAMILIES[fontIndex] || FONT_FAMILIES[3];
+  const fontFamily = CLOCK_FONT_FAMILIES[fontIndex] || CLOCK_FONT_FAMILIES[3];
   const isDottedMono = fontIndex === 3;
 
   return (

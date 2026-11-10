@@ -1,0 +1,4 @@
+Apple emoji artwork in this folder is from emoji-datasource-apple 16.0.0.
+Artwork copyright: Apple Inc. The upstream package states these images are not licensed for commercial usage.
+Source: https://github.com/iamcal/emoji-data
+Do not redistribute or use commercially without the required rights.

@@ -37,20 +37,23 @@ interface IMMDeviceEnumerator {
 class MMDeviceEnumeratorComObject { }
 
 public class WinAudioHelper {
+    private static IAudioEndpointVolume endpoint;
+
     public static int GetVolume(out bool muted) {
         muted = false;
         try {
-            var enumerator = new MMDeviceEnumeratorComObject() as IMMDeviceEnumerator;
-            IMMDevice dev = null;
-            enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
-            if (dev == null) return -1;
-            Guid epvId = typeof(IAudioEndpointVolume).GUID;
-            IAudioEndpointVolume epv = null;
-            dev.Activate(ref epvId, 23, 0, out epv);
-            if (epv == null) return -1;
+            if (endpoint == null) {
+                var enumerator = new MMDeviceEnumeratorComObject() as IMMDeviceEnumerator;
+                IMMDevice dev = null;
+                enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
+                if (dev == null) return -1;
+                Guid epvId = typeof(IAudioEndpointVolume).GUID;
+                dev.Activate(ref epvId, 23, 0, out endpoint);
+                if (endpoint == null) return -1;
+            }
             float v = 0;
-            epv.GetMasterVolumeLevelScalar(out v);
-            epv.GetMute(out muted);
+            endpoint.GetMasterVolumeLevelScalar(out v);
+            endpoint.GetMute(out muted);
             return (int)Math.Round(v * 100);
         } catch {
             return -1;
@@ -82,10 +85,8 @@ try {
     }
 } catch {}
 
-function Await-Op($WinRtTask, $ResultType) {
-    $netTask = $asTaskGeneric.MakeGenericMethod($ResultType).Invoke($null, @($WinRtTask))
-    $netTask.Wait(1500) | Out-Null
-    return $netTask.Result
+function Start-AsyncOp($WinRtOperation, $ResultType) {
+    return $asTaskGeneric.MakeGenericMethod($ResultType).Invoke($null, @($WinRtOperation))
 }
 
 $lastVol = -1
@@ -97,14 +98,20 @@ $notificationsInitialized = $false
 $initialized = $false
 $lastVolumePoll = [DateTimeOffset]::MinValue
 $lastBrightnessPoll = [DateTimeOffset]::MinValue
-$lastNotificationPoll = [DateTimeOffset]::MinValue
+$notificationTask = $null
+$notificationListType = [System.Collections.Generic.IReadOnlyList[Windows.UI.Notifications.UserNotification]]
+$brightnessEventSubscription = $null
+try {
+    # WMI brightness events arrive as the display changes; no repeated CIM scans.
+    $brightnessEventSubscription = Register-WmiEvent -Namespace 'root\wmi' -Query 'SELECT * FROM WmiMonitorBrightnessEvent' -SourceIdentifier 'TwoCodeBrightness' -ErrorAction Stop
+} catch {}
 
 while ($true) {
     try {
         $now = [DateTimeOffset]::Now
 
-        # Audio controls stay responsive while avoiding repeated COM activation at 3 Hz.
-        if (($now - $lastVolumePoll).TotalMilliseconds -ge 500) {
+        # Reuse the audio endpoint and sample at 10 Hz for responsive HUD updates.
+        if (($now - $lastVolumePoll).TotalMilliseconds -ge 100) {
             $lastVolumePoll = $now
             $muted = $false
             $vol = [WinAudioHelper]::GetVolume([ref]$muted)
@@ -123,15 +130,26 @@ while ($true) {
             }
         }
 
-        # WMI is comparatively expensive and brightness changes are infrequent.
-        if (($now - $lastBrightnessPoll).TotalMilliseconds -ge 5000) {
+        # Sample brightness at a low rate as a fallback: some Windows display drivers
+        # expose the value but never deliver WmiMonitorBrightnessEvent notifications.
+        if ($lastBrightness -lt 0 -or ($now - $lastBrightnessPoll).TotalMilliseconds -ge 700) {
             $lastBrightnessPoll = $now
             $bObj = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($null -ne $bObj -and $null -ne $bObj.CurrentBrightness) {
                 $bri = [int]$bObj.CurrentBrightness
-                if ($lastBrightness -lt 0) {
-                    $lastBrightness = $bri
-                } elseif ($bri -ne $lastBrightness) {
+                if ($lastBrightness -ge 0 -and $bri -ne $lastBrightness) {
+                    $bEv = @{ event = 'brightness'; value = $bri }
+                    Write-Output ($bEv | ConvertTo-Json -Compress)
+                }
+                $lastBrightness = $bri
+            }
+        }
+        if ($null -ne $brightnessEventSubscription) {
+            $bEvent = Receive-Job -Job $brightnessEventSubscription -ErrorAction SilentlyContinue | Select-Object -Last 1
+            if ($null -ne $bEvent) {
+                $bri = -1
+                try { $bri = [int]$bEvent.SourceEventArgs.NewEvent.Brightness } catch {}
+                if ($bri -ge 0 -and $bri -ne $lastBrightness) {
                     $lastBrightness = $bri
                     $bEv = @{ event = 'brightness'; value = $bri }
                     Write-Output ($bEv | ConvertTo-Json -Compress)
@@ -139,11 +157,15 @@ while ($true) {
             }
         }
 
-        # Keep notification delivery near real time without querying the toast store every loop.
-        if ($notifSupported -and $null -ne $listener -and ($now - $lastNotificationPoll).TotalMilliseconds -ge 1000) {
-            $lastNotificationPoll = $now
-            $listType = [System.Collections.Generic.IReadOnlyList[Windows.UI.Notifications.UserNotification]]
-            $notifs = Await-Op ($listener.GetNotificationsAsync([Windows.UI.Notifications.NotificationKinds]::Toast)) $listType
+        # Keep the toast query asynchronous so its wait cannot delay brightness events.
+        if ($notifSupported -and $null -ne $listener) {
+            $notifs = $null
+            if ($null -eq $notificationTask) {
+                $notificationTask = Start-AsyncOp ($listener.GetNotificationsAsync([Windows.UI.Notifications.NotificationKinds]::Toast)) $notificationListType
+            } elseif ($notificationTask.IsCompleted) {
+                try { $notifs = $notificationTask.Result } catch {}
+                $notificationTask = Start-AsyncOp ($listener.GetNotificationsAsync([Windows.UI.Notifications.NotificationKinds]::Toast)) $notificationListType
+            }
             if ($null -ne $notifs) {
                 foreach ($n in $notifs) {
                     $nid = [string]$n.Id
@@ -157,28 +179,8 @@ while ($true) {
                         if ($notificationsInitialized -or $isNewSinceWatcherStart) {
                             $appName = 'Windows'
                             $appId = ''
-                            $logoBase64 = ''
                             try { $appName = [string]$n.AppInfo.DisplayInfo.DisplayName } catch {}
                             try { $appId = [string]$n.AppInfo.AppUserModelId } catch {}
-                            try {
-                                $size = New-Object Windows.Foundation.Size(64, 64)
-                                $logoRef = $n.AppInfo.DisplayInfo.GetLogo($size)
-                                if ($null -ne $logoRef -and $null -ne $asStreamMethod) {
-                                    $stream = Await-Op ($logoRef.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
-                                    if ($null -ne $stream) {
-                                        $netStream = $asStreamMethod.Invoke($null, @($stream))
-                                        $ms = New-Object System.IO.MemoryStream
-                                        $netStream.CopyTo($ms)
-                                        $bytes = $ms.ToArray()
-                                        if ($bytes.Length -gt 0) {
-                                            $mime = if ($stream.ContentType) { $stream.ContentType } else { 'image/png' }
-                                            $logoBase64 = 'data:' + $mime + ';base64,' + [Convert]::ToBase64String($bytes)
-                                        }
-                                        $ms.Dispose()
-                                        $netStream.Dispose()
-                                    }
-                                }
-                            } catch {}
 
                             $titleTxt = ''
                             $bodyTxt = ''
@@ -199,7 +201,6 @@ while ($true) {
                                     id = $nid
                                     app = $appName
                                     appId = $appId
-                                    logo = $logoBase64
                                     title = if ($titleTxt) { $titleTxt } else { $appName }
                                     body = $bodyTxt
                                 }

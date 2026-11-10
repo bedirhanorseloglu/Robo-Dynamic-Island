@@ -34,9 +34,11 @@ import {
   X,
   Eye,
   EyeOff,
+  Type,
 } from 'lucide-react';
 import './settings.css';
 import { playRoboSound, playNotifSound } from './sounds';
+import { applyTypographyTokens, CLOCK_FONT_OPTIONS, CLOCK_STORAGE_KEY, normalizeFontIndex, readTypographyPreferences, TEXT_FONT_OPTIONS, TYPOGRAPHY_STORAGE_KEY } from './typography';
 
 const DEFAULT_SETTINGS = {
   userName: 'Bedirhan',
@@ -114,6 +116,7 @@ const PAGE_HEADERS = {
     subtitle: 'Language, behaviour and TwoCode itself',
     hasSearch: true,
   },
+  typography: { title: 'Typography', subtitle: 'Choose the fonts used across TwoCode' },
   notifications: { title: 'Notifications', subtitle: '' },
   island: {
     title: 'Island',
@@ -217,6 +220,11 @@ function RoboCrownAvatar({ outfit = 'Best', size = 64, eyeHex = '#ffffff' }) {
 export default function SettingsApp() {
   const [activePage, setActivePage] = useState('home');
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [textFontIndex, setTextFontIndex] = useState(() => readTypographyPreferences().textFontIndex);
+  const [numberFontIndex, setNumberFontIndex] = useState(() => {
+    try { return normalizeFontIndex(JSON.parse(localStorage.getItem(CLOCK_STORAGE_KEY) || '{}').fontIndex, CLOCK_FONT_OPTIONS.length, 3); }
+    catch { return 3; }
+  });
   const [now, setNow] = useState(new Date());
   const [liveMedia, setLiveMedia] = useState({ hasSession: false });
   const [aiHistory, setAiHistory] = useState({
@@ -253,6 +261,34 @@ export default function SettingsApp() {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    applyTypographyTokens({ textFontIndex, numberFontIndex });
+  }, [textFontIndex, numberFontIndex]);
+
+  useEffect(() => {
+    const syncTypography = (event) => {
+      if (event.key === TYPOGRAPHY_STORAGE_KEY) setTextFontIndex(readTypographyPreferences().textFontIndex);
+      if (event.key === CLOCK_STORAGE_KEY && event.newValue) {
+        try { setNumberFontIndex(normalizeFontIndex(JSON.parse(event.newValue).fontIndex, CLOCK_FONT_OPTIONS.length, 3)); }
+        catch { /* Ignore malformed storage updates. */ }
+      }
+    };
+    window.addEventListener('storage', syncTypography);
+    return () => window.removeEventListener('storage', syncTypography);
+  }, []);
+
+  const selectTextFont = (index) => {
+    setTextFontIndex(index);
+    localStorage.setItem(TYPOGRAPHY_STORAGE_KEY, JSON.stringify({ textFontIndex: index }));
+  };
+
+  const selectNumberFont = (index) => {
+    setNumberFontIndex(index);
+    let current = {};
+    try { current = JSON.parse(localStorage.getItem(CLOCK_STORAGE_KEY) || '{}'); } catch { /* Start from defaults. */ }
+    localStorage.setItem(CLOCK_STORAGE_KEY, JSON.stringify({ ...current, fontIndex: index }));
+  };
 
   // Load & sync settings + AI history + live media with Electron main process
   useEffect(() => {
@@ -527,6 +563,7 @@ export default function SettingsApp() {
             {[
               { id: 'account', label: 'Account', icon: User },
               { id: 'general', label: 'General', icon: SlidersHorizontal },
+              { id: 'typography', label: 'Typography', icon: Type },
               { id: 'notifications', label: 'Notifications', icon: Bell },
               { id: 'island', label: 'Island', icon: PanelTop },
               { id: 'focusguard', label: 'Focus guard', icon: Shield },
@@ -2167,6 +2204,52 @@ export default function SettingsApp() {
                   <i />
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {activePage === 'typography' && (
+          <div className="settings-page-body narrow-body typography-settings-page">
+            <span className="section-eyebrow">INTERFACE TEXT</span>
+            <p className="typography-intro">One choice updates labels, menus, cards and descriptions throughout TwoCode.</p>
+            <div className="typography-font-grid">
+              {TEXT_FONT_OPTIONS.map((font, index) => (
+                <button
+                  key={font.id}
+                  type="button"
+                  className={`typography-font-option ${textFontIndex === index ? 'active' : ''}`}
+                  onClick={() => selectTextFont(index)}
+                  aria-pressed={textFontIndex === index}
+                >
+                  <span className="typography-font-preview" style={{ fontFamily: font.family }}>Ag</span>
+                  <span className="typography-font-name">{font.name}</span>
+                  <span className="typography-font-sample" style={{ fontFamily: font.family }}>The quick brown fox</span>
+                  {textFontIndex === index && <Check size={15} className="typography-font-check" />}
+                </button>
+              ))}
+            </div>
+
+            <span className="section-eyebrow typography-number-eyebrow">NUMBERS & CLOCK</span>
+            <p className="typography-intro">This is shared with the clock font picker on Home. Timers, dates and numeric readouts follow it.</p>
+            <div className="typography-font-grid number-font-grid">
+              {CLOCK_FONT_OPTIONS.map((font, index) => (
+                <button
+                  key={font.id}
+                  type="button"
+                  className={`typography-font-option ${numberFontIndex === index ? 'active' : ''}`}
+                  onClick={() => selectNumberFont(index)}
+                  aria-pressed={numberFontIndex === index}
+                >
+                  <span className="typography-number-preview" style={{ fontFamily: font.family }}>12:34</span>
+                  <span className="typography-font-name">{font.name}</span>
+                  {numberFontIndex === index && <Check size={15} className="typography-font-check" />}
+                </button>
+              ))}
+            </div>
+
+            <div className="typography-role-note">
+              <span className="typography-code-sample">&lt;/&gt;</span>
+              <span><strong>Code and technical values</strong><small>JetBrains Mono · consistent throughout</small></span>
             </div>
           </div>
         )}

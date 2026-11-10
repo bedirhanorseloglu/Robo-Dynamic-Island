@@ -36,7 +36,7 @@ const MODE_DIMENSIONS = {
   'music-bar': { bodyWidth: 350, height: 26, earRadius: 9, bottomRadius: 13, droplet: 0 },
   'focus-bar': { bodyWidth: 110, height: 26, earRadius: 8, bottomRadius: 13, droplet: 0 },
   'focus-bar-media': { bodyWidth: 104, height: 26, earRadius: 8, bottomRadius: 13, droplet: 1 },
-  expanded: { bodyWidth: 620, height: 256, earRadius: 0, bottomRadius: 24, droplet: 0 },
+  expanded: { bodyWidth: 620, height: 286, earRadius: 0, bottomRadius: 24, droplet: 0 },
 };
 
 let mainWindow = null;
@@ -51,6 +51,12 @@ let lyricsCacheMap = new Map();
 let lyricsRequestId = 0;
 let lyricsLookupKey = '';
 let coverCacheMap = new Map();
+
+function setBoundedCache(cache, key, value, limit) {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > limit) cache.delete(cache.keys().next().value);
+}
 
 async function fetchAlbumCover(title, artist) {
   if (!title) return '';
@@ -104,7 +110,7 @@ async function fetchAlbumCover(title, artist) {
         });
       });
       if (coverUrl) {
-        coverCacheMap.set(cacheKey, coverUrl);
+        setBoundedCache(coverCacheMap, cacheKey, coverUrl, 100);
         return coverUrl;
       }
     } catch {}
@@ -137,7 +143,7 @@ async function fetchAlbumCover(title, artist) {
         });
       });
       if (coverUrl) {
-        coverCacheMap.set(cacheKey, coverUrl);
+        setBoundedCache(coverCacheMap, cacheKey, coverUrl, 100);
         return coverUrl;
       }
     } catch {}
@@ -316,6 +322,52 @@ let localGoogleState = {
   agenda: [],
   lastUpdated: 0,
 };
+
+let localAgendaEvents = null;
+
+function getLocalAgendaPath() {
+  return path.join(app.getPath('userData'), 'local_agenda.json');
+}
+
+function getLocalAgendaEvents() {
+  if (Array.isArray(localAgendaEvents)) return localAgendaEvents;
+  const agendaPath = getLocalAgendaPath();
+  try {
+    if (fs.existsSync(agendaPath)) {
+      const saved = JSON.parse(fs.readFileSync(agendaPath, 'utf8'));
+      localAgendaEvents = Array.isArray(saved) ? saved.map((evt, index) => ({
+        ...evt,
+        id: evt?.id || `local_evt_${index}_${Date.now()}`,
+      })) : [];
+      return localAgendaEvents;
+    }
+  } catch {}
+
+  // Preserve events from older versions while moving away from Google-backed agenda storage.
+  try {
+    const legacy = JSON.parse(fs.readFileSync(getGoogleSessionPath(), 'utf8'));
+    localAgendaEvents = Array.isArray(legacy.agenda) ? legacy.agenda.map((evt, index) => ({
+      ...evt,
+      id: evt?.id || `legacy_evt_${index}_${Date.now()}`,
+    })) : [];
+  } catch {
+    localAgendaEvents = [];
+  }
+  saveLocalAgendaEvents();
+  return localAgendaEvents;
+}
+
+function saveLocalAgendaEvents() {
+  try {
+    fs.writeFileSync(getLocalAgendaPath(), JSON.stringify(localAgendaEvents || [], null, 2), 'utf8');
+  } catch {}
+}
+
+function publishLocalAgendaEvents() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('local-agenda-update', getLocalAgendaEvents());
+  }
+}
 
 function getGoogleSessionPath() {
   return path.join(app.getPath('userData'), 'google_session.json');
@@ -578,6 +630,7 @@ function parseLrc(lrcText) {
 
 function normalizeLyricsMatch(value) {
   return String(value || '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
@@ -672,7 +725,17 @@ async function fetchLyricsFromLrclib(title, artist) {
   const cleanArtist = (artist || '')
     .replace(/\s*-\s*Topic$/i, '')
     .replace(/VEVO$/i, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
     .trim();
+
+  // YouTube SMTC often reports titles as "Artist - Track". When that prefix
+  // agrees with the artist metadata, search LRCLIB using the actual track name.
+  const titleParts = cleanTitle.split(/\s+[–—-]\s+/);
+  const titlePrefix = titleParts.shift() || '';
+  const lookupTitle = titleParts.length > 0 &&
+    normalizeLyricsMatch(titlePrefix) === normalizeLyricsMatch(cleanArtist)
+    ? titleParts.join(' - ').trim()
+    : cleanTitle;
 
   const cacheKey = `${cleanArtist}__${cleanTitle}`.toLowerCase();
   if (lyricsCacheMap.has(cacheKey)) {
@@ -680,10 +743,10 @@ async function fetchLyricsFromLrclib(title, artist) {
   }
 
   // 1. Direct GET endpoint (fastest, most accurate)
-  if (cleanTitle) {
-    const directRes = await queryLrclibGet(cleanTitle, cleanArtist);
+  if (lookupTitle) {
+    const directRes = await queryLrclibGet(lookupTitle, cleanArtist);
     if (directRes && directRes.length > 0) {
-      lyricsCacheMap.set(cacheKey, directRes);
+      setBoundedCache(lyricsCacheMap, cacheKey, directRes, 40);
       return directRes;
     }
   }
@@ -709,9 +772,9 @@ async function fetchLyricsFromLrclib(title, artist) {
     const key = cand.toLowerCase().trim();
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    const res = await queryLrclibSearch(cand, cleanTitle, cleanArtist);
+    const res = await queryLrclibSearch(cand, lookupTitle, cleanArtist);
     if (res && res.length > 0) {
-      lyricsCacheMap.set(cacheKey, res);
+      setBoundedCache(lyricsCacheMap, cacheKey, res, 40);
       return res;
     }
   }
@@ -1446,18 +1509,7 @@ app.on('will-quit', () => {
       systemWatcherProc.kill();
     } catch {}
   }
-  if (bgGoogleWorker && !bgGoogleWorker.isDestroyed()) {
-    try {
-      bgGoogleWorker.destroy();
-    } catch {}
-    bgGoogleWorker = null;
-  }
-  if (bgCalendarWorker && !bgCalendarWorker.isDestroyed()) {
-    try {
-      bgCalendarWorker.destroy();
-    } catch {}
-    bgCalendarWorker = null;
-  }
+  if (gmailPollTimer) clearInterval(gmailPollTimer);
 });
 
 app.whenReady().then(() => {
@@ -1662,6 +1714,26 @@ ipcMain.handle('open-external', (_event, url) => {
     shell.openPath(url);
   }
   return true;
+});
+
+ipcMain.handle('open-app', async (_event, target = {}) => {
+  try {
+    const appTarget = typeof target === 'string' ? { url: target } : target;
+    const localPath = appTarget.path || appTarget.url;
+    if (appTarget.type === 'native-app' || (typeof localPath === 'string' && /\.(exe|lnk|bat|cmd)$/i.test(localPath))) {
+      if (typeof localPath !== 'string' || !path.isAbsolute(localPath) || !fs.existsSync(localPath)) return false;
+      const error = await shell.openPath(localPath);
+      return !error;
+    }
+    const url = appTarget.url;
+    if (typeof url !== 'string') return false;
+    const parsed = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+    if (!['https:', 'http:'].includes(parsed.protocol)) return false;
+    await shell.openExternal(parsed.toString());
+    return true;
+  } catch {
+    return false;
+  }
 });
 
 ipcMain.handle('open-notification-target', async (_event, target = {}) => {
@@ -1874,287 +1946,187 @@ ipcMain.handle('get-network-info', async () => {
 });
 
 ipcMain.handle('add-agenda-event', async (_event, evt) => {
-  if (!evt || !evt.title) return localGoogleState;
+  if (!evt || !String(evt.title || '').trim()) return getLocalAgendaEvents();
   const now = new Date();
   const defaultTime = new Date(now.getTime() + 15 * 60 * 1000).toLocaleTimeString('tr-TR', {
     hour: '2-digit',
     minute: '2-digit',
   });
   const newEvt = {
-    id: 'evt_' + Date.now(),
-    title: evt.title,
+    id: evt.id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    title: String(evt.title).trim(),
     time: evt.time || defaultTime,
     date: evt.date || 'Bugün',
     notified: false,
   };
-  localGoogleState.agenda = [...(localGoogleState.agenda || []), newEvt];
-  saveGoogleSessionToDisk(localGoogleState);
+  localAgendaEvents = [...getLocalAgendaEvents(), newEvt];
+  saveLocalAgendaEvents();
+  publishLocalAgendaEvents();
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('google-data-update', localGoogleState);
     mainWindow.webContents.send('windows-notification', {
       id: 'notif_agenda_' + newEvt.id,
-      app: 'Google Calendar',
-      appId: 'com.google.calendar',
+      app: 'Takvim',
+      appId: 'twocode.calendar',
       logo: '',
-      title: 'Ajandaya Eklendi: ' + newEvt.title,
+      title: 'Takvime eklendi: ' + newEvt.title,
       body: `Etkinlik planlandı (${newEvt.date} · ${newEvt.time})`,
     });
   }
-  return localGoogleState;
+  return localAgendaEvents;
 });
 
-// Google Background Mail & Calendar Worker
-let lastCheckedGmailCount = -1;
+ipcMain.handle('get-agenda-events', () => getLocalAgendaEvents());
+
+ipcMain.handle('delete-agenda-event', async (_event, eventId) => {
+  if (eventId === undefined || eventId === null) return getLocalAgendaEvents();
+  localAgendaEvents = getLocalAgendaEvents().filter((evt) => String(evt?.id) !== String(eventId));
+  agendaNotifiedIds.delete(String(eventId));
+  saveLocalAgendaEvents();
+  publishLocalAgendaEvents();
+  return localAgendaEvents;
+});
+
+// Google Mail state is polled through the authenticated session without a hidden renderer.
 let agendaNotifiedIds = new Set();
-let bgGoogleWorker = null;
-let bgCalendarWorker = null;
+let gmailPollTimer = null;
+let gmailPollInFlight = false;
+let gmailFeedInitialized = false;
+const knownGmailMessageIds = new Set();
 
-function startGoogleBackgroundWorker() {
-  // Mail is paused; leave the worker implementation below for later.
-  return;
-  if (!localGoogleState || !localGoogleState.connected) return;
+function decodeAtomText(value) {
+  return String(value || '')
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&#x([\da-f]{1,6});/gi, (_match, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_match, code) => String.fromCodePoint(Number(code)))
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\"')
+    .replace(/&apos;/g, "'").replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  const FIREFOX_UA =
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0';
+function readAtomTag(source, tag) {
+  const match = String(source || '').match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  return match ? decodeAtomText(match[1]) : '';
+}
 
-  const authSession = session.fromPartition('persist:google_account_session');
-  try {
-    authSession.setUserAgent(FIREFOX_UA);
-  } catch (e) {}
-
-  // Strip Chromium headers
-  try {
-    authSession.webRequest.onBeforeSendHeaders((details, callback) => {
-      const reqHeaders = { ...details.requestHeaders };
-      delete reqHeaders['sec-ch-ua'];
-      delete reqHeaders['sec-ch-ua-mobile'];
-      delete reqHeaders['sec-ch-ua-platform'];
-      delete reqHeaders['sec-ch-ua-model'];
-      delete reqHeaders['sec-ch-ua-platform-version'];
-      delete reqHeaders['sec-ch-ua-full-version'];
-      delete reqHeaders['sec-ch-ua-full-version-list'];
-      reqHeaders['User-Agent'] = FIREFOX_UA;
-      callback({ cancel: false, requestHeaders: reqHeaders });
-    });
-  } catch (e) {}
-
-  // Allow web notifications permission
-  try {
-    authSession.setPermissionRequestHandler((_wc, permission, callback, details = {}) => {
-      let requestingHost = '';
-      try {
-        requestingHost = new URL(details.requestingUrl || '').hostname;
-      } catch {}
-      const isGoogleOrigin =
-        requestingHost === 'mail.google.com' || requestingHost === 'calendar.google.com';
-      callback(permission === 'notifications' && isGoogleOrigin);
-    });
-  } catch (e) {}
-
-  // 1. Gmail Background Worker Window (Hidden, keeps Gmail live)
-  if (!bgGoogleWorker || bgGoogleWorker.isDestroyed()) {
-    try {
-      bgGoogleWorker = new BrowserWindow({
-        show: false,
-        width: 1024,
-        height: 768,
-        webPreferences: {
-          partition: 'persist:google_account_session',
-          nodeIntegration: false,
-          contextIsolation: true,
-          preload: path.join(__dirname, 'google-bg-preload.cjs'),
-          backgroundThrottling: true,
-        },
-      });
-
-      bgGoogleWorker.webContents.setUserAgent(FIREFOX_UA);
-      bgGoogleWorker.loadURL('https://mail.google.com/mail/u/0/');
-
-      bgGoogleWorker.webContents.on('console-message', (_event, level, message) => {
-        console.log(`[Gmail Worker ${level}] ${message}`);
-      });
-
-      bgGoogleWorker.webContents.on('did-finish-load', () => {
-        if (!bgGoogleWorker || bgGoogleWorker.isDestroyed()) return;
-        const cur = bgGoogleWorker.webContents.getURL();
-        console.log('✓ Gmail Worker loaded:', cur, '| Title:', bgGoogleWorker.webContents.getTitle());
-      });
-
-      bgGoogleWorker.on('closed', () => {
-        bgGoogleWorker = null;
-      });
-    } catch (err) {
-      console.error('Failed to start bgGoogleWorker:', err);
-    }
-  }
-
-  // 2. Google Calendar Background Worker Window (Hidden, catches reminders)
-  if (!bgCalendarWorker || bgCalendarWorker.isDestroyed()) {
-    try {
-      bgCalendarWorker = new BrowserWindow({
-        show: false,
-        width: 1024,
-        height: 768,
-        webPreferences: {
-          partition: 'persist:google_account_session',
-          nodeIntegration: false,
-          contextIsolation: true,
-          preload: path.join(__dirname, 'google-bg-preload.cjs'),
-          backgroundThrottling: true,
-        },
-      });
-
-      bgCalendarWorker.webContents.setUserAgent(FIREFOX_UA);
-      bgCalendarWorker.loadURL('https://calendar.google.com/calendar/u/0/r');
-
-      bgCalendarWorker.webContents.on('console-message', (_event, level, message) => {
-        console.log(`[Calendar Worker ${level}] ${message}`);
-      });
-
-      bgCalendarWorker.webContents.on('did-finish-load', () => {
-        if (!bgCalendarWorker || bgCalendarWorker.isDestroyed()) return;
-        const cur = bgCalendarWorker.webContents.getURL();
-        console.log('✓ Calendar Worker loaded:', cur, '| Title:', bgCalendarWorker.webContents.getTitle());
-      });
-
-      bgCalendarWorker.on('closed', () => {
-        bgCalendarWorker = null;
-      });
-    } catch (err) {
-      console.error('Failed to start bgCalendarWorker:', err);
-    }
+function publishGmailData() {
+  saveGoogleSessionToDisk(localGoogleState);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('google-data-update', { ...localGoogleState });
   }
 }
 
-let lastDispatchedMailKey = '';
-let lastDispatchedMailTime = 0;
-
-ipcMain.on('google-bg-new-mail', (_event, mailData) => {
-  if (!mailData) return;
-  const dedupKey = `${mailData.sender}__${mailData.subject}`;
-  const now = Date.now();
-  if (dedupKey === lastDispatchedMailKey && now - lastDispatchedMailTime < 6000) {
-    return;
-  }
-  lastDispatchedMailKey = dedupKey;
-  lastDispatchedMailTime = now;
-
-  console.log('✓ LIVE GMAIL RECEIVED:', mailData.sender, mailData.subject);
-
-  if (mailData.counts) {
-    localGoogleState.mailCounts = { ...localGoogleState.mailCounts, ...mailData.counts };
-  } else {
-    localGoogleState.mailCounts.unreadTotal = mailData.unreadCount || (localGoogleState.mailCounts.unreadTotal || 0) + 1;
-    localGoogleState.mailCounts.primary = localGoogleState.mailCounts.unreadTotal;
-  }
-
-  const mailItem = {
-    id: mailData.id || ('m_' + Date.now()),
-    from: mailData.sender || 'Google Mail',
-    subject: mailData.subject || 'Yeni e-posta alındı',
-    snippet: mailData.snippet || '',
-    time: mailData.time || new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-  };
-  localGoogleState.latestMails = [mailItem, ...(localGoogleState.latestMails || [])].slice(0, 10);
-  saveGoogleSessionToDisk(localGoogleState);
-
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('google-data-update', { ...localGoogleState });
-    mainWindow.webContents.send('windows-notification', {
-      id: 'notif_mail_' + Date.now(),
-      app: 'Gmail',
-      appId: 'com.google.gmail',
-      logo: '',
-      sender: mailData.sender || '',
-      profileImage: mailData.senderPhoto || mailData.profileImage || '',
-      notificationKind: 'message',
-      targetUrl: 'https://mail.google.com/',
-      title: `${mailData.sender} (Gmail)`,
-      body: mailData.subject + (mailData.snippet ? ' — ' + mailData.snippet : ''),
+async function pollGmailAtomFeed() {
+  if (gmailPollInFlight || !localGoogleState?.connected) return;
+  gmailPollInFlight = true;
+  try {
+    const authSession = session.fromPartition('persist:google_account_session');
+    const response = await authSession.fetch('https://mail.google.com/mail/feed/atom', {
+      credentials: 'include',
+      headers: { Accept: 'application/atom+xml, application/xml, text/xml' },
     });
-  }
-});
+    if (!response.ok || /accounts\.google\.com/i.test(response.url || '')) return;
+    const xml = await response.text();
+    if (!/<feed\b/i.test(xml)) return;
 
-ipcMain.on('google-bg-push-notification', (_event, notif) => {
-  if (!notif) return;
-  console.log('✓ GOOGLE PUSH NOTIF:', notif.title, notif.body);
-  const isCal = /calendar|takvim|ajanda/i.test(`${notif.title} ${notif.body} ${notif.origin || ''}`);
-  const appName = isCal ? 'Google Calendar' : 'Gmail';
-  const appId = isCal ? 'com.google.calendar' : 'com.google.gmail';
+    const fullCount = Number(readAtomTag(xml, 'fullcount')) || 0;
+    const entries = [...xml.matchAll(/<entry\b[^>]*>([\s\S]*?)<\/entry>/gi)].map((match) => {
+      const entry = match[1];
+      const author = entry.match(/<author\b[^>]*>([\s\S]*?)<\/author>/i)?.[1] || '';
+      return {
+        id: readAtomTag(entry, 'id'),
+        sender: readAtomTag(author, 'name') || readAtomTag(author, 'email') || 'Google Mail',
+        subject: readAtomTag(entry, 'title') || 'Yeni e-posta',
+        snippet: readAtomTag(entry, 'summary'),
+        time: readAtomTag(entry, 'issued') || readAtomTag(entry, 'modified'),
+      };
+    }).filter((mail) => mail.id);
 
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('windows-notification', {
-      id: 'notif_push_' + Date.now(),
-      app: appName,
-      appId: appId,
-      logo: notif.icon || '',
-      sender: notif.sender || '',
-      profileImage: notif.profileImage || notif.avatar || '',
-      notificationKind: isCal ? 'event' : 'message',
-      targetUrl: isCal ? 'https://calendar.google.com/' : 'https://mail.google.com/',
-      title: notif.title || appName,
-      body: notif.body || '',
-    });
-  }
-});
+    const previousCounts = localGoogleState.mailCounts || {};
+    localGoogleState.mailCounts = {
+      primary: fullCount,
+      updates: Number(previousCounts.updates) || 0,
+      promotions: Number(previousCounts.promotions) || 0,
+      unreadTotal: fullCount,
+    };
+    localGoogleState.latestMails = entries.slice(0, 10).map((mail) => ({
+      id: mail.id,
+      from: mail.sender,
+      subject: mail.subject,
+      snippet: mail.snippet,
+      time: mail.time ? new Date(mail.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : 'Şimdi',
+    }));
 
-ipcMain.on('google-bg-count-update', (_event, { counts, latestMail }) => {
-  if (counts && typeof counts === 'object') {
-    localGoogleState.mailCounts = { ...localGoogleState.mailCounts, ...counts };
-    if (latestMail && (!localGoogleState.latestMails || localGoogleState.latestMails.length === 0)) {
-      localGoogleState.latestMails = [
-        {
-          id: latestMail.id,
-          from: latestMail.sender,
-          subject: latestMail.subject,
-          snippet: latestMail.snippet,
-          time: latestMail.time || 'Bugün',
-        },
-      ];
+    if (gmailFeedInitialized) {
+      for (const mail of entries) {
+        if (knownGmailMessageIds.has(mail.id)) continue;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('windows-notification', {
+            id: `notif_mail_${Date.now()}`,
+            app: 'Gmail',
+            appId: 'com.google.gmail',
+            sender: mail.sender,
+            notificationKind: 'message',
+            targetUrl: 'https://mail.google.com/',
+            title: `${mail.sender} (Gmail)`,
+            body: mail.subject + (mail.snippet ? ` — ${mail.snippet}` : ''),
+          });
+        }
+      }
     }
-    saveGoogleSessionToDisk(localGoogleState);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('google-data-update', { ...localGoogleState });
-    }
-  }
-});
 
+    entries.forEach((mail) => knownGmailMessageIds.add(mail.id));
+    while (knownGmailMessageIds.size > 300) knownGmailMessageIds.delete(knownGmailMessageIds.values().next().value);
+    gmailFeedInitialized = true;
+    publishGmailData();
+  } catch (error) {
+    console.warn('[Gmail] Hafif posta kontrolü başarısız:', error?.message || error);
+  } finally {
+    gmailPollInFlight = false;
+  }
+}
+
+function startGoogleBackgroundWorker() {
+  // Mail is paused for now; keep its polling logic here for later reactivation.
+  // if (!localGoogleState?.connected || gmailPollTimer) return;
+  // pollGmailAtomFeed();
+  // gmailPollTimer = setInterval(pollGmailAtomFeed, 15000);
+}
 function startGoogleMailAndAgendaWatcher() {
-  // Initial worker trigger
-  setTimeout(() => {
-    if (localGoogleState && localGoogleState.connected) {
-      startGoogleBackgroundWorker();
-    }
-  }, 1000);
+  // Mail polling triggers are paused; calendar reminders below still run.
+  // setTimeout(() => {
+  //   if (localGoogleState && localGoogleState.connected) {
+  //     startGoogleBackgroundWorker();
+  //   }
+  // }, 1000);
 
   setInterval(() => {
-    if (!localGoogleState || !localGoogleState.connected) return;
-
-    // 1. Agenda event time reminder check (every 5 seconds)
+    // Local calendar reminders run independently from any Google account.
     try {
       const now = new Date();
       const currentHHMM = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-      if (Array.isArray(localGoogleState.agenda)) {
-        for (const evt of localGoogleState.agenda) {
-          if (!evt || agendaNotifiedIds.has(evt.id)) continue;
-          if (evt.time) {
-            const [h, m] = evt.time.split(':').map(Number);
-            if (!isNaN(h) && !isNaN(m)) {
-              const evtMinutes = h * 60 + m;
-              if (Math.abs(currentMinutes - evtMinutes) <= 1 || currentHHMM === evt.time) {
-                agendaNotifiedIds.add(evt.id);
-                if (mainWindow && !mainWindow.isDestroyed()) {
-                  mainWindow.webContents.send('windows-notification', {
-                    id: 'notif_cal_due_' + evt.id,
-                    app: 'Google Calendar',
-                    appId: 'com.google.calendar',
-                    logo: '',
-                    title: 'Ajanda Hatırlatıcısı',
-                    body: `${evt.title} (${evt.time}) vakti geldi!`,
-                  });
-                }
+      for (const evt of getLocalAgendaEvents()) {
+        if (!evt || agendaNotifiedIds.has(String(evt.id))) continue;
+        if (evt.date && evt.date !== 'Bugün' && evt.date !== today) continue;
+        if (evt.time) {
+          const [h, m] = evt.time.split(':').map(Number);
+          if (!isNaN(h) && !isNaN(m)) {
+            const evtMinutes = h * 60 + m;
+            if (Math.abs(currentMinutes - evtMinutes) <= 1 || currentHHMM === evt.time) {
+              agendaNotifiedIds.add(String(evt.id));
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('windows-notification', {
+                  id: 'notif_cal_due_' + evt.id,
+                  app: 'Takvim',
+                  appId: 'twocode.calendar',
+                  logo: '',
+                  title: 'Etkinlik zamanı',
+                  body: `${evt.title} · ${evt.time}`,
+                });
               }
             }
           }
@@ -2162,12 +2134,7 @@ function startGoogleMailAndAgendaWatcher() {
       }
     } catch (e) {}
 
-    // 2. Ensure worker is running if connected
-    if (localGoogleState.connected) {
-      if (!bgGoogleWorker || bgGoogleWorker.isDestroyed()) {
-        startGoogleBackgroundWorker();
-      }
-    }
+    // Mail polling is paused; calendar reminders are checked above.
   }, 5000);
 }
 
@@ -2201,8 +2168,8 @@ ipcMain.handle('test-agenda-notif', async () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('windows-notification', {
       id: 'notif_agenda_' + Date.now(),
-      app: 'Google Calendar',
-      appId: 'com.google.calendar',
+      app: 'Takvim',
+      appId: 'twocode.calendar',
       logo: '',
       title: 'Ajanda Hatırlatıcısı',
       body: '15 dakika sonra: Haftalık Ekip Senkronizasyonu (14:30)',
@@ -2455,13 +2422,9 @@ ipcMain.handle('disconnect-google', async () => {
     if (fs.existsSync(sPath)) fs.unlinkSync(sPath);
   } catch {}
 
-  if (bgGoogleWorker && !bgGoogleWorker.isDestroyed()) {
-    try { bgGoogleWorker.destroy(); } catch {}
-    bgGoogleWorker = null;
-  }
-  if (bgCalendarWorker && !bgCalendarWorker.isDestroyed()) {
-    try { bgCalendarWorker.destroy(); } catch {}
-    bgCalendarWorker = null;
+  if (gmailPollTimer) {
+    clearInterval(gmailPollTimer);
+    gmailPollTimer = null;
   }
 
   if (mainWindow && !mainWindow.isDestroyed()) {

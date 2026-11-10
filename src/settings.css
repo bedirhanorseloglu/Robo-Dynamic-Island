@@ -6,11 +6,30 @@
   height: 100vh;
   background: #060608;
   color: #ffffff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-family-ui, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
   display: flex;
   overflow: hidden;
   user-select: none;
 }
+
+.typography-settings-page { padding-bottom: 34px; }
+.typography-intro { color: rgba(255,255,255,.48); font-size: 12px; line-height: 1.55; margin: -2px 0 12px; }
+.typography-font-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-bottom: 22px; }
+.typography-font-option { position: relative; min-width: 0; min-height: 105px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 5px; padding: 12px; color: rgba(255,255,255,.83); text-align: left; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.075); border-radius: 12px; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
+.typography-font-option:hover { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.18); transform: translateY(-1px); }
+.typography-font-option.active { background: rgba(185,140,83,.13); border-color: rgba(218,177,121,.58); box-shadow: inset 0 0 0 1px rgba(218,177,121,.08); }
+.typography-font-preview { font-size: 29px; font-weight: 700; line-height: 1; letter-spacing: -.04em; }
+.typography-font-name { font-size: 11px; font-weight: 650; white-space: nowrap; }
+.typography-font-sample { color: rgba(255,255,255,.38); font-size: 9px; overflow: hidden; max-width: 100%; white-space: nowrap; }
+.typography-font-check { position: absolute; top: 9px; right: 9px; color: #e5c394; }
+.typography-number-eyebrow { display: block; margin-top: 5px; }
+.number-font-grid .typography-font-option { min-height: 88px; }
+.typography-number-preview { font-size: 25px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.typography-role-note { display: flex; align-items: center; gap: 12px; padding: 13px 15px; border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.025); border-radius: 12px; }
+.typography-code-sample { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,.07); color: #d6b27f; font: 600 12px var(--font-family-code); }
+.typography-role-note strong,.typography-role-note small { display: block; }
+.typography-role-note strong { font-size: 12px; }
+.typography-role-note small { margin-top: 3px; color: rgba(255,255,255,.42); font-size: 10px; }
 
 /* =========================================================
    LEFT SIDEBAR (212px)
@@ -120,7 +139,7 @@
 }
 
 .nav-section-label {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-family-label, var(--font-family-ui));
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -313,7 +332,7 @@
 }
 
 .hero-notch-date {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-family-number, var(--font-family-ui));
   font-size: 9.5px;
   letter-spacing: 0.12em;
   color: rgba(255, 255, 255, 0.65);
@@ -448,7 +467,7 @@
 }
 
 .section-eyebrow {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-family-label, var(--font-family-ui));
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -826,7 +845,7 @@
   border-radius: 8px !important;
   padding: 0 30px 0 10px !important;
   color: #ffffff !important;
-  font-family: 'JetBrains Mono', monospace !important;
+  font-family: var(--font-family-code, 'JetBrains Mono', monospace) !important;
   font-size: 11.5px !important;
   outline: none !important;
   transition: border-color 0.15s ease;
@@ -1581,7 +1600,7 @@
 }
 
 .shortcut-kbd-pill {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-family-ui, 'Inter', sans-serif);
   font-size: 11.5px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.85);
@@ -1632,7 +1651,7 @@
 }
 
 .notif-group-title {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-family-label, var(--font-family-ui));
   font-size: 9.5px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.36);

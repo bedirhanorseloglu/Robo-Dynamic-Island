@@ -1,26 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { playRoboSound } from './sounds';
 
-export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal', batteryPercent, batteryCharging = false }) {
+export default function RoboEyes({ mood = 'normal', reaction = null, active = true, onPoke, size = 'normal', batteryPercent, batteryCharging = false }) {
   const [blink, setBlink] = useState(false);
   const [wakePhase, setWakePhase] = useState('closed'); // 'closed' | 'flutter' | 'look-left' | 'look-right' | 'happy' | 'done'
   const [lookOffset, setLookOffset] = useState({ x: 0, y: 0 });
   const [pokeCount, setPokeCount] = useState(0);
   const [isDizzy, setIsDizzy] = useState(false);
-  const [idleAction, setIdleAction] = useState('');
+  const [pokeAction, setPokeAction] = useState('');
   const containerRef = useRef(null);
   const blinkTimerRef = useRef(null);
   const pokeTimerRef = useRef(null);
+  const dizzyTimerRef = useRef(null);
   const lastLookUpdateRef = useRef(0);
+  const hasWokenRef = useRef(false);
 
-  // Startup wake-up animation sequence when Robo first appears
+  // Run the wake-up sequence only once, when a visible Robo instance first becomes active.
   useEffect(() => {
+    if (!active || hasWokenRef.current) return undefined;
     const t1 = setTimeout(() => setWakePhase('flutter'), 260);
     const t2 = setTimeout(() => setWakePhase('closed'), 460);
     const t3 = setTimeout(() => setWakePhase('look-left'), 620);
     const t4 = setTimeout(() => setWakePhase('look-right'), 940);
     const t5 = setTimeout(() => setWakePhase('happy'), 1240);
-    const t6 = setTimeout(() => setWakePhase('done'), 1750);
+    const t6 = setTimeout(() => {
+      setWakePhase('done');
+      hasWokenRef.current = true;
+    }, 1750);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
@@ -29,12 +35,19 @@ export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal', bat
       clearTimeout(t5);
       clearTimeout(t6);
     };
+  }, [active]);
+
+  useEffect(() => () => {
+    clearTimeout(pokeTimerRef.current);
+    clearTimeout(dizzyTimerRef.current);
   }, []);
 
-  useEffect(() => () => clearTimeout(pokeTimerRef.current), []);
-
-  // Natural periodic blinking
+  // A single lightweight blink timer runs only for the currently visible Robo instance.
   useEffect(() => {
+    if (!active || mood === 'music') {
+      setBlink(false);
+      return undefined;
+    }
     const interval = setInterval(() => {
       setBlink(true);
       clearTimeout(blinkTimerRef.current);
@@ -44,34 +57,11 @@ export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal', bat
       clearInterval(interval);
       clearTimeout(blinkTimerRef.current);
     };
-  }, []);
-
-  // Tiny bits of idle personality: an occasional glance, nap, or desk-side dance.
-  useEffect(() => {
-    let idleTimer;
-    let actionTimer;
-    let cancelled = false;
-    const actions = ['peek', 'sleep', 'dance', 'boop'];
-    const schedule = () => {
-      idleTimer = setTimeout(() => {
-        if (cancelled) return;
-        setIdleAction(actions[Math.floor(Math.random() * actions.length)]);
-        actionTimer = setTimeout(() => {
-          setIdleAction('');
-          if (!cancelled) schedule();
-        }, 1050);
-      }, 6500 + Math.random() * 5000);
-    };
-    schedule();
-    return () => {
-      cancelled = true;
-      clearTimeout(idleTimer);
-      clearTimeout(actionTimer);
-    };
-  }, []);
+  }, [active, mood]);
 
   // Subtle eye tracking toward cursor
   useEffect(() => {
+    if (!active) return undefined;
     const handleMove = (e) => {
       if (!containerRef.current) return;
       const now = performance.now();
@@ -90,19 +80,20 @@ export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal', bat
     };
     window.addEventListener('mousemove', handleMove);
     return () => window.removeEventListener('mousemove', handleMove);
-  }, []);
+  }, [active]);
 
   const handleClick = (e) => {
     e.stopPropagation();
     const next = pokeCount + 1;
     setPokeCount(next);
-    setIdleAction(next % 2 === 0 ? 'dance' : 'boop');
+    setPokeAction(next % 2 === 0 ? 'poke-dance' : 'poke-boop');
     clearTimeout(pokeTimerRef.current);
-    pokeTimerRef.current = setTimeout(() => setIdleAction(''), 900);
+    pokeTimerRef.current = setTimeout(() => setPokeAction(''), 900);
     if (next >= 4) {
       setIsDizzy(true);
       playRoboSound('dizzy', true);
-      setTimeout(() => {
+      clearTimeout(dizzyTimerRef.current);
+      dizzyTimerRef.current = setTimeout(() => {
         setIsDizzy(false);
         setPokeCount(0);
       }, 3500);
@@ -118,11 +109,12 @@ export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal', bat
 
   const activeMood = isDizzy
     ? 'dizzy'
+    : normalizedMood === 'music'
+    ? 'music'
     : wakePhase !== 'done'
     ? `wake-${wakePhase}`
-    : normalizedMood === 'normal' && idleAction
-    ? `idle-${idleAction}`
     : normalizedMood;
+  const activeReaction = isDizzy ? '' : pokeAction || (active ? reaction?.name || '' : '');
 
   const scale = size === 'large' ? 1.55 : size === 'small' ? 0.82 : 1;
 
@@ -135,7 +127,7 @@ export default function RoboEyes({ mood = 'normal', onPoke, size = 'normal', bat
   return (
     <div
       ref={containerRef}
-      className={`robo-eyes-wrap ${activeMood} ${batteryCharging ? 'is-charging' : ''} ${!batteryCharging && Number.isFinite(batteryPercent) && batteryPercent <= 20 ? 'is-low-battery' : ''}`}
+      className={`robo-eyes-wrap ${activeMood} ${activeReaction ? `reaction-${activeReaction}` : ''} ${!active ? 'is-inactive' : ''} ${batteryCharging ? 'is-charging' : ''} ${!batteryCharging && Number.isFinite(batteryPercent) && batteryPercent <= 20 ? 'is-low-battery' : ''}`}
       onClick={handleClick}
       title="Robo"
       style={{
