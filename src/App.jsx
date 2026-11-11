@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import RealAppIcon from './RealAppIcon';
+import { shouldPersistNotification } from './notification-history-policy.mjs';
 import {
   Home,
   Terminal,
@@ -21,6 +22,14 @@ import {
   SkipBack,
   SkipForward,
   Laptop,
+  Fan,
+  Flame,
+  Leaf,
+  Zap,
+  Bike,
+  Car,
+  Rocket,
+  Flower2,
   Plus,
   Check,
   X,
@@ -46,6 +55,16 @@ import {
   Radio,
   Tag,
   Bot,
+  Sunrise,
+  MicOff,
+  Gauge,
+  Layers,
+  Lock,
+  Cpu,
+  Palette,
+  Keyboard,
+  Sparkles,
+  Touchpad as TouchpadIcon,
 } from 'lucide-react';
 import RoboEyes from './RoboEyes';
 import HeroClock, { CLOCK_FONT_FAMILIES } from './HeroClock';
@@ -78,7 +97,7 @@ function useDominantColor(imageSrc) {
     }
     let cancelled = false;
     const img = new Image();
-    img.crossOrigin = 'Anonymous';
+    if (/^https?:\/\//i.test(imageSrc)) img.crossOrigin = 'Anonymous';
     img.onload = () => {
       if (cancelled) return;
       try {
@@ -153,37 +172,72 @@ function useDominantColor(imageSrc) {
   return accent;
 }
 
-// Use the notifying app identity first, then its native icon's dominant color.
+function hslToRgb(h, s, l) {
+  s /= 100;
+  l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+}
+
+function generateAppGradient(name) {
+  let hash = 0;
+  const str = String(name || 'App').trim();
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const hue1 = Math.abs(hash) % 360;
+  const hue2 = (hue1 + 42) % 360;
+  const rgb1 = hslToRgb(hue1, 92, 54);
+  const rgb2 = hslToRgb(hue2, 92, 42);
+  const toHex = (n) => n.toString(16).padStart(2, '0');
+  return {
+    rgb: `${rgb1[0]}, ${rgb1[1]}, ${rgb1[2]}`,
+    hex: `#${toHex(rgb1[0])}${toHex(rgb1[1])}${toHex(rgb1[2])}`,
+    secondaryRgb: `${rgb2[0]}, ${rgb2[1]}, ${rgb2[2]}`,
+    secondaryHex: `#${toHex(rgb2[0])}${toHex(rgb2[1])}${toHex(rgb2[2])}`,
+  };
+}
+
+// Brand color definitions with rich primary + secondary gradients
 const NOTIFICATION_BRANDS = [
-  { match: /gmail|google.?mail|com\.google\.android\.gm/, rgb: '234, 67, 53', hex: '#EA4335', brand: 'gmail' },
-  { match: /google.?calendar|calendar|takvim|ajanda/, rgb: '66, 133, 244', hex: '#4285F4', brand: 'calendar' },
-  { match: /outlook|microsoft\.office\.outlook/, rgb: '0, 120, 212', hex: '#0078D4', brand: 'outlook' },
-  { match: /teams|msteams/, rgb: '98, 100, 167', hex: '#6264A7', brand: 'teams' },
-  { match: /whatsapp/, rgb: '37, 211, 102', hex: '#25D366', brand: 'whatsapp' },
-  { match: /discord/, rgb: '88, 101, 242', hex: '#5865F2', brand: 'discord' },
-  { match: /telegram/, rgb: '42, 171, 238', hex: '#2AABEE', brand: 'telegram' },
-  { match: /spotify/, rgb: '30, 215, 96', hex: '#1ED760', brand: 'spotify' },
-  { match: /youtube|ytmusic/, rgb: '255, 0, 51', hex: '#FF0033', brand: 'youtube' },
-  { match: /instagram/, rgb: '225, 48, 108', hex: '#E1306C', brand: 'instagram' },
-  { match: /slack/, rgb: '97, 31, 105', hex: '#611F69', brand: 'slack' },
-  { match: /twitter|(^|[\s._-])x($|[\s._-])/, rgb: '29, 155, 240', hex: '#1D9BF0', brand: 'x' },
-  { match: /linkedin/, rgb: '10, 102, 194', hex: '#0A66C2', brand: 'linkedin' },
-  { match: /facebook|messenger|meta/, rgb: '8, 102, 255', hex: '#0866FF', brand: 'facebook' },
-  { match: /tiktok/, rgb: '254, 44, 85', hex: '#FE2C55', brand: 'tiktok' },
-  { match: /snapchat/, rgb: '255, 252, 0', hex: '#FFFC00', brand: 'snapchat' },
-  { match: /pinterest/, rgb: '230, 0, 35', hex: '#E60023', brand: 'pinterest' },
-  { match: /signal/, rgb: '58, 118, 240', hex: '#3A76F0', brand: 'signal' },
-  { match: /zoom/, rgb: '45, 140, 255', hex: '#2D8CFF', brand: 'zoom' },
-  { match: /steam/, rgb: '23, 26, 33', hex: '#171A21', brand: 'steam' },
-  { match: /github/, rgb: '110, 64, 201', hex: '#6E40C9', brand: 'github' },
-  { match: /claude|anthropic/, rgb: '217, 119, 87', hex: '#D97757', brand: 'claude' },
-  { match: /chatgpt|openai/, rgb: '16, 163, 127', hex: '#10A37F', brand: 'openai' },
-  { match: /chrome|google chrome/, rgb: '66, 133, 244', hex: '#4285F4', brand: 'chrome' },
-  { match: /microsoft edge|\bedge\b/, rgb: '10, 155, 140', hex: '#0A9B8C', brand: 'edge' },
-  { match: /firefox|mozilla/, rgb: '255, 113, 57', hex: '#FF7139', brand: 'firefox' },
-  { match: /visual studio code|vscode/, rgb: '0, 122, 204', hex: '#007ACC', brand: 'vscode' },
-  { match: /onedrive/, rgb: '0, 120, 212', hex: '#0078D4', brand: 'onedrive' },
-  { match: /windows security|defender/, rgb: '0, 164, 239', hex: '#00A4EF', brand: 'security' },
+  { match: /gmail|google.?mail|com\.google\.android\.gm/, rgb: '234, 67, 53', hex: '#EA4335', secondaryRgb: '66, 133, 244', secondaryHex: '#4285F4', brand: 'gmail' },
+  { match: /google.?calendar|calendar|takvim|ajanda/, rgb: '66, 133, 244', hex: '#4285F4', secondaryRgb: '52, 168, 83', secondaryHex: '#34A853', brand: 'calendar' },
+  { match: /outlook|microsoft\.office\.outlook/, rgb: '0, 120, 212', hex: '#0078D4', secondaryRgb: '0, 90, 158', secondaryHex: '#005A9E', brand: 'outlook' },
+  { match: /teams|msteams/, rgb: '98, 100, 167', hex: '#6264A7', secondaryRgb: '70, 71, 117', secondaryHex: '#464775', brand: 'teams' },
+  { match: /whatsapp/, rgb: '37, 211, 102', hex: '#25D366', secondaryRgb: '18, 140, 126', secondaryHex: '#128C7E', brand: 'whatsapp' },
+  { match: /discord/, rgb: '88, 101, 242', hex: '#5865F2', secondaryRgb: '71, 82, 196', secondaryHex: '#4752C4', brand: 'discord' },
+  { match: /telegram/, rgb: '42, 171, 238', hex: '#2AABEE', secondaryRgb: '34, 158, 217', secondaryHex: '#229ED9', brand: 'telegram' },
+  { match: /spotify/, rgb: '30, 215, 96', hex: '#1ED760', secondaryRgb: '29, 185, 84', secondaryHex: '#1DB954', brand: 'spotify' },
+  { match: /youtube|ytmusic/, rgb: '255, 0, 51', hex: '#FF0033', secondaryRgb: '196, 48, 43', secondaryHex: '#C4302B', brand: 'youtube' },
+  { match: /instagram/, rgb: '225, 48, 108', hex: '#E1306C', secondaryRgb: '253, 29, 29', secondaryHex: '#FD1D1D', brand: 'instagram' },
+  { match: /slack/, rgb: '97, 31, 105', hex: '#611F69', secondaryRgb: '236, 178, 46', secondaryHex: '#ECB22E', brand: 'slack' },
+  { match: /twitter|(^|[\s._-])x($|[\s._-])/, rgb: '29, 155, 240', hex: '#1D9BF0', secondaryRgb: '15, 20, 25', secondaryHex: '#0F1419', brand: 'x' },
+  { match: /linkedin/, rgb: '10, 102, 194', hex: '#0A66C2', secondaryRgb: '0, 65, 130', secondaryHex: '#004182', brand: 'linkedin' },
+  { match: /facebook|messenger|meta/, rgb: '8, 102, 255', hex: '#0866FF', secondaryRgb: '0, 198, 255', secondaryHex: '#00C6FF', brand: 'facebook' },
+  { match: /tiktok/, rgb: '254, 44, 85', hex: '#FE2C55', secondaryRgb: '37, 244, 238', secondaryHex: '#25F4EE', brand: 'tiktok' },
+  { match: /snapchat/, rgb: '255, 252, 0', hex: '#FFFC00', secondaryRgb: '230, 220, 0', secondaryHex: '#E6DC00', brand: 'snapchat' },
+  { match: /steam/, rgb: '102, 192, 244', hex: '#66C0F4', secondaryRgb: '27, 40, 56', secondaryHex: '#1B2838', brand: 'steam' },
+  { match: /epic\s*games|epicgames/, rgb: '0, 120, 242', hex: '#0078F2', secondaryRgb: '49, 49, 49', secondaryHex: '#313131', brand: 'epic' },
+  { match: /github/, rgb: '110, 64, 201', hex: '#6E40C9', secondaryRgb: '36, 41, 47', secondaryHex: '#24292F', brand: 'github' },
+  { match: /claude|anthropic/, rgb: '217, 119, 87', hex: '#D97757', secondaryRgb: '193, 95, 60', secondaryHex: '#C15F3C', brand: 'claude' },
+  { match: /chatgpt|openai/, rgb: '16, 163, 127', hex: '#10A37F', secondaryRgb: '26, 127, 100', secondaryHex: '#1A7F64', brand: 'openai' },
+  { match: /codex/, rgb: '97, 152, 255', hex: '#6198FF', secondaryRgb: '138, 92, 246', secondaryHex: '#8A5CF6', brand: 'codex' },
+  { match: /antigravity/, rgb: '73, 218, 202', hex: '#49DACA', secondaryRgb: '42, 157, 143', secondaryHex: '#2A9D8F', brand: 'antigravity' },
+  { match: /ghelper|g-helper/, rgb: '56, 166, 255', hex: '#38A6FF', secondaryRgb: '0, 184, 116', secondaryHex: '#00B874', brand: 'ghelper' },
+  { match: /twocode|two.?code/, rgb: '97, 152, 255', hex: '#6198FF', secondaryRgb: '138, 92, 246', secondaryHex: '#8A5CF6', brand: 'twocode' },
+  { match: /chrome|google chrome/, rgb: '66, 133, 244', hex: '#4285F4', secondaryRgb: '234, 67, 53', secondaryHex: '#EA4335', brand: 'chrome' },
+  { match: /microsoft edge|\bedge\b/, rgb: '10, 155, 140', hex: '#0A9B8C', secondaryRgb: '0, 120, 212', secondaryHex: '#0078D4', brand: 'edge' },
+  { match: /firefox|mozilla/, rgb: '255, 113, 57', hex: '#FF7139', secondaryRgb: '255, 59, 48', secondaryHex: '#FF3B30', brand: 'firefox' },
+  { match: /visual studio code|vscode/, rgb: '0, 122, 204', hex: '#007ACC', secondaryRgb: '0, 152, 255', secondaryHex: '#0098FF', brand: 'vscode' },
+  { match: /onedrive/, rgb: '0, 120, 212', hex: '#0078D4', secondaryRgb: '35, 144, 235', secondaryHex: '#2390EB', brand: 'onedrive' },
+  { match: /windows security|defender/, rgb: '0, 164, 239', hex: '#00A4EF', secondaryRgb: '0, 102, 204', secondaryHex: '#0066CC', brand: 'security' },
+  { match: /windows|system|ayarlar|settings|explorer|dosya yöneticisi|terminal|cmd|powershell/, rgb: '0, 120, 212', hex: '#0078D4', secondaryRgb: '0, 199, 253', secondaryHex: '#00C7FD', brand: 'windows' },
+  { match: /brave/, rgb: '251, 84, 43', hex: '#FB542B', secondaryRgb: '255, 26, 85', secondaryHex: '#FF1A55', brand: 'brave' },
+  { match: /notion/, rgb: '35, 35, 35', hex: '#232323', secondaryRgb: '0, 0, 0', secondaryHex: '#000000', brand: 'notion' },
+  { match: /riot|valorant|league of legends/, rgb: '235, 0, 41', hex: '#EB0029', secondaryRgb: '20, 20, 20', secondaryHex: '#141414', brand: 'riot' },
 ];
 
 function resolveNotifBrand(banner, logoAccent) {
@@ -193,11 +247,44 @@ function resolveNotifBrand(banner, logoAccent) {
   const identity = `${appIdentity} ${fallbackText}`;
 
   const knownBrand = NOTIFICATION_BRANDS.find(({ match }) => match.test(identity));
-  if (knownBrand) return knownBrand;
-  if (logoAccent?.isLiveCover) {
-    return { rgb: logoAccent.rgb, hex: logoAccent.hex, brand: 'native-logo' };
+  const customAccentRgb = String(banner?.accentRgb || '');
+  const customAccentHex = String(banner?.accentHex || '');
+  const customAccentSecondaryRgb = String(banner?.accentSecondaryRgb || '');
+  const customAccentSecondaryHex = String(banner?.accentSecondaryHex || '');
+  const validAccentRgb = (rgb) => /^\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*$/.test(rgb) && rgb.split(',').every((part) => Number(part.trim()) <= 255);
+  if (
+    /ghelper|g-helper/i.test(appIdentity) &&
+    validAccentRgb(customAccentRgb) &&
+    /^#[\da-f]{6}$/i.test(customAccentHex) &&
+    validAccentRgb(customAccentSecondaryRgb) &&
+    /^#[\da-f]{6}$/i.test(customAccentSecondaryHex)
+  ) {
+    return { rgb: customAccentRgb, hex: customAccentHex, secondaryRgb: customAccentSecondaryRgb, secondaryHex: customAccentSecondaryHex, brand: 'ghelper' };
   }
-  return { rgb: '43, 130, 246', hex: '#2b82f6', brand: 'default' };
+  if (logoAccent?.isLiveCover) {
+    return {
+      rgb: logoAccent.rgb,
+      hex: logoAccent.hex,
+      secondaryRgb: knownBrand?.secondaryRgb || logoAccent.rgb,
+      secondaryHex: knownBrand?.secondaryHex || logoAccent.hex,
+      brand: knownBrand?.brand || 'native-logo',
+    };
+  }
+  if (knownBrand) {
+    return {
+      ...knownBrand,
+      secondaryRgb: knownBrand.secondaryRgb || knownBrand.rgb,
+      secondaryHex: knownBrand.secondaryHex || knownBrand.hex,
+    };
+  }
+
+  // Dynamic consistent gradient generation for any app
+  const appName = banner?.app || banner?.appId || 'Notification';
+  const dynamic = generateAppGradient(appName);
+  return {
+    ...dynamic,
+    brand: 'generated-app',
+  };
 }
 
 function resolveNotificationPresentation(banner) {
@@ -229,7 +316,13 @@ function resolveNotificationPresentation(banner) {
 }
 
 function isSafeNotificationImage(src) {
-  return typeof src === 'string' && (/^data:image\//i.test(src) || /^https:\/\//i.test(src));
+  if (typeof src !== 'string' || !src.trim()) return false;
+  return (
+    /^data:image\//i.test(src) ||
+    /^https?:\/\//i.test(src) ||
+    /^file:\/\//i.test(src) ||
+    /^[a-zA-Z]:[/\\]/i.test(src)
+  );
 }
 
 function NotificationAvatar({ banner, brand, presentation }) {
@@ -240,7 +333,7 @@ function NotificationAvatar({ banner, brand, presentation }) {
     .slice(0, 2)
     .map((part) => Array.from(part)[0]?.toLocaleUpperCase('tr-TR') || '')
     .join('');
-  const personAvatar = presentation.hasPerson;
+  const personAvatar = Boolean(profileImage);
 
   return (
     <div className={`notif-toast-avatar ${personAvatar ? 'is-person-avatar' : 'is-app-avatar'} ${presentation.kind === 'audio' || presentation.kind === 'video' ? 'is-call-avatar' : ''}`}>
@@ -248,99 +341,333 @@ function NotificationAvatar({ banner, brand, presentation }) {
         <>
           <span className="notif-toast-initials is-image-fallback">{initials || '?'}</span>
           <img className="notif-toast-profile-image" src={profileImage} alt={`${presentation.sender} profil fotoğrafı`} onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+          <span className="notif-toast-app-chip" aria-label={`${presentation.app} logosu`}>
+            <NotifBrandIcon brand={brand} logo={banner?.logo} appName={presentation.app || banner?.app} banner={banner} />
+          </span>
         </>
-      ) : personAvatar ? (
-        <span className="notif-toast-initials">{initials || '?'}</span>
       ) : (
-        <NotifBrandIcon brand={brand} logo={banner.logo} />
-      )}
-      {personAvatar && isSafeNotificationImage(banner?.logo) && (
-        <span className="notif-toast-app-chip"><img src={banner.logo} alt="" /></span>
+        <NotifBrandIcon key={`${brand}-${banner?.logo || 'brand'}`} brand={brand} logo={banner?.logo} appName={presentation.app || banner?.app} banner={banner} />
       )}
     </div>
   );
 }
 
-function NotifBrandIcon({ brand, logo }) {
+function NotifBrandIcon({ brand, logo, appName, banner }) {
   const [logoFailed, setLogoFailed] = useState(false);
   if (logo && isSafeNotificationImage(logo) && !logoFailed) {
     return <img src={logo} alt="" className="notif-toast-app-logo" onError={() => setLogoFailed(true)} />;
   }
-  if (brand === 'gmail') {
+  const b = String(brand || '').toLowerCase();
+  const name = String(appName || banner?.app || banner?.title || '').toLowerCase();
+
+  if (b === 'gmail' || /gmail|google.?mail/.test(name)) {
     return (
-      <svg width="31" height="31" viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="#fff" />
-        <path d="M4.5 17.5V7.2l7.5 5.5 7.5-5.5v10.3" fill="none" stroke="#EA4335" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M4.5 7.2v10.3" stroke="#4285F4" strokeWidth="2.25" strokeLinecap="round" />
-        <path d="M19.5 7.2v10.3" stroke="#34A853" strokeWidth="2.25" strokeLinecap="round" />
+      <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="2" y="3" width="20" height="18" rx="4" fill="#ffffff" />
+        <path d="M4.5 17.5V7.2l7.5 5.5 7.5-5.5v10.3" fill="none" stroke="#EA4335" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M4.5 7.2v10.3" stroke="#4285F4" strokeWidth="2.2" strokeLinecap="round" />
+        <path d="M19.5 7.2v10.3" stroke="#34A853" strokeWidth="2.2" strokeLinecap="round" />
         <path d="M12 12.7 19.5 7.2" stroke="#FBBC04" strokeWidth="1.8" strokeLinecap="round" />
       </svg>
     );
   }
-  if (brand === 'calendar') {
+  if (b === 'calendar' || /calendar|takvim|ajanda/.test(name)) {
     return (
-      <svg width="29" height="29" viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="3" y="4.5" width="18" height="17" rx="4" fill="#fff" />
-        <path d="M3 8.2a3.7 3.7 0 0 1 3.7-3.7h10.6A3.7 3.7 0 0 1 21 8.2V10H3z" fill="#4285F4" />
-        <path d="M6.5 3v4M17.5 3v4" stroke="#EA4335" strokeWidth="2" strokeLinecap="round" />
-        <text x="12" y="18" textAnchor="middle" fontFamily="Arial,sans-serif" fontSize="9" fontWeight="700" fill="#4285F4">31</text>
+      <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="17" rx="4" fill="#ffffff" />
+        <path d="M3 8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3V10H3z" fill="#4285F4" />
+        <path d="M7 2.5v3.5M17 2.5v3.5" stroke="#EA4335" strokeWidth="2" strokeLinecap="round" />
+        <text x="12" y="18" textAnchor="middle" fontFamily="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" fontSize="8.5" fontWeight="800" fill="#4285F4">31</text>
       </svg>
     );
   }
-  if (brand === 'whatsapp') {
+  if (b === 'whatsapp' || /whatsapp/.test(name)) {
     return (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="url(#gh-wa-grad)" />
+        <defs>
+          <linearGradient id="gh-wa-grad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#25D366" />
+            <stop offset="1" stopColor="#128C7E" />
+          </linearGradient>
+        </defs>
         <path
-          d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM17.46 16.26C17.22 16.94 16.06 17.55 15.51 17.63C15.01 17.71 14.37 17.74 13.67 17.52C13.24 17.38 12.69 17.2 11.99 16.9C9.03 15.62 7.1 12.64 6.95 12.44C6.8 12.24 5.75 10.85 5.75 9.41C5.75 7.97 6.51 7.26 6.78 6.97C7.05 6.68 7.37 6.61 7.57 6.61C7.77 6.61 7.97 6.61 8.14 6.62C8.32 6.63 8.56 6.55 8.8 7.12C9.04 7.7 9.62 9.14 9.69 9.29C9.76 9.44 9.81 9.61 9.71 9.81C9.61 10.01 9.56 10.14 9.41 10.31C9.26 10.48 9.1 10.7 8.96 10.84C8.81 10.99 8.65 11.15 8.83 11.45C9.01 11.75 9.62 12.75 10.53 13.56C11.7 14.6 12.68 14.93 12.98 15.08C13.28 15.23 13.46 15.2 13.64 14.99C13.82 14.78 14.41 14.09 14.62 13.79C14.83 13.49 15.03 13.54 15.31 13.64C15.59 13.74 17.08 14.48 17.38 14.63C17.68 14.78 17.88 14.85 17.95 14.98C18.02 15.11 18.02 15.72 17.46 16.26Z"
+          d="M12 4.2C7.7 4.2 4.2 7.7 4.2 12c0 1.4.4 2.8 1.1 4L4 20l4.2-1.1c1.2.6 2.5 1 3.8 1 4.3 0 7.8-3.5 7.8-7.8S16.3 4.2 12 4.2zm4.6 11.1c-.2.6-1.1 1-1.5 1.1-.4.1-.9.1-1.5-.1-.4-.1-.8-.3-1.4-.5-2.4-1-3.9-3.4-4-3.6-.1-.2-.9-1.3-.9-2.5 0-1.2.6-1.7.8-2 .2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5.2.5.7 1.7.8 1.8.1.1.1.3 0 .4s-.2.3-.3.4l-.3.3c-.1.1-.2.2 0 .5.2.3.7 1.1 1.4 1.8 1 .9 1.8 1.1 2 .1.2-.2.7-.8.9-1.1.2-.3.4-.2.6-.1.2.1 1.4.7 1.6.8.2.1.4.2.5.3 0 .2 0 .7-.4 1.3z"
           fill="#FFFFFF"
         />
       </svg>
     );
   }
-  if (brand === 'discord') {
+  if (b === 'discord' || /discord/.test(name)) {
     return (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#5865F2" />
         <path
-          d="M19.27 5.33C17.94 4.71 16.5 4.26 15 4C14.8 4.37 14.58 4.86 14.42 5.25C12.83 5.01 11.26 5.01 9.69 5.25C9.53 4.86 9.3 4.37 9.1 4C7.6 4.26 6.16 4.71 4.83 5.33C2.13 9.4 1.4 13.37 1.76 17.28C3.55 18.61 5.29 19.42 7 19.95C7.43 19.37 7.81 18.74 8.13 18.08C7.51 17.85 6.91 17.56 6.35 17.22C6.5 17.11 6.64 16.99 6.78 16.87C10.21 18.46 13.94 18.46 17.33 16.87C17.47 16.99 17.61 17.11 17.76 17.22C17.2 17.56 16.6 17.85 15.98 18.08C16.3 18.74 16.68 19.37 17.11 19.95C18.82 19.42 20.56 18.61 22.35 17.28C22.77 12.74 21.63 8.81 19.27 5.33ZM8.68 14.87C7.65 14.87 6.8 13.91 6.8 12.74C6.8 11.57 7.63 10.61 8.68 10.61C9.73 10.61 10.58 11.57 10.56 12.74C10.56 13.91 9.73 14.87 8.68 14.87ZM15.43 14.87C14.4 14.87 13.55 13.91 13.55 12.74C13.55 11.57 14.38 10.61 15.43 10.61C16.48 10.61 17.33 11.57 17.31 12.74C17.31 13.91 16.48 14.87 15.43 14.87Z"
+          d="M17.4 6.8c-.9-.4-1.9-.7-2.9-.9-.1.3-.3.6-.4.9-1.1-.2-2.2-.2-3.3 0-.1-.3-.3-.6-.4-.9-1 .2-2 .5-2.9.9-1.8 2.7-2.3 5.4-2.1 8.1 1.2.9 2.4 1.5 3.6 1.8.3-.4.6-.8.8-1.3-.4-.2-.8-.4-1.2-.6.1-.1.2-.2.3-.2 2.3 1.1 4.8 1.1 7.1 0 .1.1.2.2.3.2-.4.2-.8.4-1.2.6.2.4.5.9.8 1.3 1.2-.4 2.4-.9 3.6-1.8.3-3.1-.5-5.7-2.2-8.1zm-7.2 6.4c-.7 0-1.3-.6-1.3-1.4 0-.8.6-1.4 1.3-1.4.7 0 1.3.6 1.3 1.4 0 .8-.6 1.4-1.3 1.4zm3.6 0c-.7 0-1.3-.6-1.3-1.4 0-.8.6-1.4 1.3-1.4.7 0 1.3.6 1.3 1.4 0 .8-.6 1.4-1.3 1.4z"
           fill="#FFFFFF"
         />
       </svg>
     );
   }
-  if (brand === 'telegram') {
+  if (b === 'telegram' || /telegram/.test(name)) {
     return (
-      <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="url(#gh-tg-grad)" />
+        <defs>
+          <linearGradient id="gh-tg-grad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#2AABEE" />
+            <stop offset="1" stopColor="#229ED9" />
+          </linearGradient>
+        </defs>
         <path
-          d="M20.66 4.24L2.93 11.08C1.72 11.56 1.73 12.24 2.71 12.54L7.26 13.96L17.79 7.31C18.29 7.01 18.75 7.17 18.37 7.51L9.84 15.21H9.83L9.84 15.22L9.53 19.91C9.99 19.91 10.19 19.7 10.45 19.45L12.66 17.3L17.26 20.7C18.11 21.17 18.72 20.93 18.93 19.92L21.95 5.68C22.26 4.44 21.48 3.88 20.66 4.24Z"
+          d="M18.8 5.6L4.5 11.1c-1 .4-1 1-.2 1.2l3.7 1.1 8.5-5.4c.4-.2.8-.1.5.2l-6.9 6.2h-.1l-.2 3.8c.4 0 .5-.2.7-.4l1.8-1.7 3.7 2.7c.7.4 1.2.2 1.4-.6l2.4-11.5c.3-1-.4-1.5-1-.9z"
           fill="#FFFFFF"
         />
       </svg>
     );
   }
-  if (brand === 'spotify') {
+  if (b === 'spotify' || /spotify/.test(name)) {
     return (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#1ED760" />
         <path
-          d="M17.9 9.1C14.4 7 8.9 6.8 5.6 7.8C5.1 7.9 4.9 8.4 5 8.9C5.1 9.4 5.6 9.6 6.1 9.5C8.9 8.6 13.9 8.8 16.9 10.6C17.4 10.9 18 10.7 18.2 10.3C18.5 9.9 18.3 9.3 17.9 9.1ZM16.8 13.5C16.6 13.9 16.1 14 15.7 13.7C13.2 12.2 9.4 11.7 6.5 12.6C6.1 12.7 5.6 12.5 5.5 12.1C5.4 11.7 5.6 11.2 6 11.1C9.4 10.1 13.6 10.6 16.5 12.4C16.9 12.6 17 13.1 16.8 13.5ZM15.5 16.3C15.3 16.6 14.9 16.7 14.6 16.5C12.4 15.2 9.7 14.9 6.6 15.6C6.3 15.7 5.9 15.5 5.8 15.1C5.7 14.8 5.9 14.4 6.3 14.3C9.8 13.5 12.8 13.8 15.3 15.3C15.6 15.5 15.7 16 15.5 16.3Z"
+          d="M16.5 9.7c-2.9-1.7-7.6-1.9-10.3-1.1-.4.1-.9-.1-1-.5-.1-.4.1-.9.5-1 3.1-.9 8.3-.7 11.5 1.2.4.2.5.7.3 1.1-.2.4-.6.5-1 .3zm-.9 3.6c-.2.3-.6.4-1 .2-2-.9-5.1-1.3-7.5-.6-.3.1-.7-.1-.8-.4-.1-.3.1-.7.4-.8 2.7-.8 6.1-.4 8.4.6.4.2.5.7.3 1zm-1.1 2.3c-.2.2-.5.3-.7.1-1.8-1.1-4-1.3-6.5-.7-.3.1-.5-.1-.6-.4-.1-.3.1-.5.4-.6 2.8-.6 5.3-.4 7.3.9.2.2.3.5.1.7z"
           fill="#000000"
         />
       </svg>
     );
   }
-  if (brand === 'youtube') {
+  if (b === 'youtube' || /youtube|ytmusic/.test(name)) {
     return (
-      <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#FF0000" />
         <polygon points="9.5,7.5 16.5,12 9.5,16.5" fill="#FFFFFF" />
       </svg>
     );
   }
-  if (brand === 'claude') {
-    return <Check size={20} strokeWidth={3} color="#ffffff" />;
+  if (b === 'instagram' || /instagram/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="url(#gh-ig-grad)" />
+        <defs>
+          <linearGradient id="gh-ig-grad" x1="0" y1="24" x2="24" y2="0" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#FCB045" />
+            <stop offset="0.5" stopColor="#FD1D1D" />
+            <stop offset="1" stopColor="#833AB4" />
+          </linearGradient>
+        </defs>
+        <rect x="5.5" y="5.5" width="13" height="13" rx="3.5" stroke="#FFFFFF" strokeWidth="1.8" />
+        <circle cx="12" cy="12" r="3" stroke="#FFFFFF" strokeWidth="1.8" />
+        <circle cx="15.5" cy="8.5" r="0.9" fill="#FFFFFF" />
+      </svg>
+    );
   }
-  if (brand === 'mail' || brand === 'outlook') {
-    return <Mail size={19} strokeWidth={2.3} color="#ffffff" />;
+  if (b === 'x' || /twitter|\bx\b/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#000000" />
+        <path
+          d="M16.5 5.5h2.1l-4.6 5.3 5.4 7.2h-4.3l-3.3-4.4-3.8 4.4H5.9l4.9-5.6L5.5 5.5h4.4l3 4 3.6-4zm-.7 11.2h1.2L8.3 6.7H7L15.8 16.7z"
+          fill="#FFFFFF"
+        />
+      </svg>
+    );
   }
-  return <Bell size={18} strokeWidth={2.3} color="#ffffff" />;
+  if (b === 'steam' || /steam/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="url(#gh-steam-grad)" />
+        <defs>
+          <linearGradient id="gh-steam-grad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#1B2838" />
+            <stop offset="1" stopColor="#2A475E" />
+          </linearGradient>
+        </defs>
+        <circle cx="14.5" cy="8.5" r="3.2" stroke="#66C0F4" strokeWidth="1.8" fill="none" />
+        <circle cx="9" cy="15.5" r="2.2" stroke="#66C0F4" strokeWidth="1.6" fill="none" />
+        <path d="M12.5 10.5L8.5 14" stroke="#66C0F4" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (b === 'vscode' || /visual studio code|vscode/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#1E1E1E" />
+        <path d="M17.5 4.5l-6 5.5-4-3-3 1.5 3 3.5-3 3.5 3 1.5 4-3 6 5.5 2.5-1V5.5l-2.5-1zM15 15.5l-4-3.5 4-3.5v7z" fill="#007ACC" />
+      </svg>
+    );
+  }
+  if (b === 'chrome' || /chrome/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#FFFFFF" />
+        <circle cx="12" cy="12" r="4" fill="#4285F4" />
+        <path d="M12 4a8 8 0 0 1 6.9 4H12z" fill="#EA4335" />
+        <path d="M18.9 8A8 8 0 0 1 15.5 18.5L12 12z" fill="#FBBC04" />
+        <path d="M15.5 18.5A8 8 0 0 1 5.1 8H12z" fill="#34A853" />
+      </svg>
+    );
+  }
+  if (b === 'edge' || /microsoft edge|\bedge\b/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="url(#gh-edge-grad)" />
+        <defs>
+          <linearGradient id="gh-edge-grad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#0A9B8C" />
+            <stop offset="1" stopColor="#0078D4" />
+          </linearGradient>
+        </defs>
+        <path d="M12 5a7 7 0 0 1 7 7c0 4-3 7-7 7s-7-3-7-7c0-2 1-4 3-5 .5 1.5 1.5 2.5 3 2.5 2 0 3-1.5 3-3.5 0-1-.3-1.8-.8-2.4C10.7 5.2 11.3 5 12 5z" fill="#FFFFFF" />
+      </svg>
+    );
+  }
+  if (b === 'firefox' || /firefox|mozilla/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="url(#gh-ff-grad)" />
+        <defs>
+          <linearGradient id="gh-ff-grad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#FF7139" />
+            <stop offset="1" stopColor="#FF3B30" />
+          </linearGradient>
+        </defs>
+        <circle cx="12" cy="12" r="5" fill="#FFCC00" />
+        <circle cx="12" cy="12" r="3.5" fill="#007ACC" />
+      </svg>
+    );
+  }
+  if (b === 'github' || /github/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#24292F" />
+        <path
+          d="M12 4.5a7.5 7.5 0 0 0-2.4 14.6c.4.1.5-.2.5-.4v-1.4c-2.1.5-2.5-.9-2.5-.9-.3-.8-.8-1-.8-1-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.2 1.8.8 2.2.6.1-.5.3-.8.5-1-1.7-.2-3.4-.8-3.4-3.7 0-.8.3-1.5.8-2-.1-.2-.4-1 .1-2 0 0 .6-.2 2.1.8a7.2 7.2 0 0 1 3.8 0c1.5-1 2.1-.8 2.1-.8.5 1 .2 1.8.1 2 .5.5.8 1.2.8 2 0 2.9-1.8 3.5-3.5 3.7.3.3.6.8.6 1.6v2.4c0 .2.1.5.5.4A7.5 7.5 0 0 0 12 4.5z"
+          fill="#FFFFFF"
+        />
+      </svg>
+    );
+  }
+  if (b === 'slack' || /slack/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#FFFFFF" />
+        <path d="M6 10.5a1.5 1.5 0 1 1 1.5-1.5v1.5H6zm2.5 0a1.5 1.5 0 1 1 3 0v4a1.5 1.5 0 1 1-3 0v-4z" fill="#36C5F0" />
+        <path d="M13.5 6a1.5 1.5 0 1 1 1.5 1.5H13.5V6zm0 2.5a1.5 1.5 0 1 1 0 3h-4a1.5 1.5 0 1 1 0-3h4z" fill="#2EB67D" />
+        <path d="M18 13.5a1.5 1.5 0 1 1-1.5 1.5v-1.5H18zm-2.5 0a1.5 1.5 0 1 1-3 0v-4a1.5 1.5 0 1 1 3 0v4z" fill="#ECB22E" />
+        <path d="M10.5 18a1.5 1.5 0 1 1-1.5-1.5h1.5V18zm0-2.5a1.5 1.5 0 1 1 0-3h4a1.5 1.5 0 1 1 0 3h-4z" fill="#E01E5A" />
+      </svg>
+    );
+  }
+  if (b === 'teams' || /teams|msteams/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#6264A7" />
+        <circle cx="15.5" cy="8.5" r="2" fill="#FFFFFF" opacity="0.85" />
+        <path d="M13.5 12h4c1 0 2 .8 2 1.8V15h-8v-1.2c0-1 1-1.8 2-1.8z" fill="#FFFFFF" opacity="0.85" />
+        <circle cx="9.5" cy="9.5" r="2.5" fill="#FFFFFF" />
+        <path d="M7 14h5c1.1 0 2 .9 2 2v1.5H5V16c0-1.1.9-2 2-2z" fill="#FFFFFF" />
+      </svg>
+    );
+  }
+  if (b === 'outlook' || /outlook/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#0078D4" />
+        <path d="M5 8l7 4.5L19 8v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8z" fill="#FFFFFF" opacity="0.4" />
+        <rect x="4.5" y="6" width="9" height="12" rx="2" fill="#FFFFFF" />
+        <text x="9" y="14.5" textAnchor="middle" fontFamily="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" fontSize="8" fontWeight="850" fill="#0078D4">O</text>
+      </svg>
+    );
+  }
+  if (b === 'linkedin' || /linkedin/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#0A66C2" />
+        <text x="12" y="16.5" textAnchor="middle" fontFamily="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" fontSize="13" fontWeight="850" fill="#FFFFFF">in</text>
+      </svg>
+    );
+  }
+  if (b === 'facebook' || /facebook|meta|messenger/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#0866FF" />
+        <path d="M13 18v-5.5h2l.3-2.3H13V8.8c0-.7.2-1.1 1.2-1.1h1.1V5.7c-.2 0-.9-.1-1.8-.1-1.8 0-3 1.1-3 3.1v1.5H8.5v2.3H10.5V18H13z" fill="#FFFFFF" />
+      </svg>
+    );
+  }
+  if (b === 'tiktok' || /tiktok/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#000000" />
+        <path d="M16.5 8.5c-1-.2-1.9-.9-2.2-1.8h-2.1v9c0 1.2-1 2.2-2.2 2.2s-2.2-1-2.2-2.2 1-2.2 2.2-2.2c.3 0 .5 0 .8.1v-2.2c-.3 0-.5-.1-.8-.1-2.4 0-4.3 1.9-4.3 4.4s1.9 4.4 4.3 4.4 4.3-1.9 4.3-4.4v-4.8c1.1.8 2.4 1.2 3.8 1.2V10.2c-1.3 0-2.4-.7-2.9-1.7h1.6V8.5z" fill="#25F4EE" />
+        <path d="M15.5 7.5c-1-.2-1.9-.9-2.2-1.8h-2.1v9c0 1.2-1 2.2-2.2 2.2s-2.2-1-2.2-2.2 1-2.2 2.2-2.2c.3 0 .5 0 .8.1v-2.2c-.3 0-.5-.1-.8-.1-2.4 0-4.3 1.9-4.3 4.4s1.9 4.4 4.3 4.4 4.3-1.9 4.3-4.4v-4.8c1.1.8 2.4 1.2 3.8 1.2V9.2c-1.3 0-2.4-.7-2.9-1.7h1.6V7.5z" fill="#FE2C55" opacity="0.8" />
+      </svg>
+    );
+  }
+  if (b === 'windows' || b === 'security' || /windows|system|ayarlar|settings|defender|explorer/.test(name)) {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="url(#gh-win-grad)" />
+        <defs>
+          <linearGradient id="gh-win-grad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#0078D4" />
+            <stop offset="1" stopColor="#00C7FD" />
+          </linearGradient>
+        </defs>
+        <rect x="5.5" y="5.5" width="5.8" height="5.8" rx="1" fill="#FFFFFF" />
+        <rect x="12.7" y="5.5" width="5.8" height="5.8" rx="1" fill="#FFFFFF" />
+        <rect x="5.5" y="12.7" width="5.8" height="5.8" rx="1" fill="#FFFFFF" />
+        <rect x="12.7" y="12.7" width="5.8" height="5.8" rx="1" fill="#FFFFFF" />
+      </svg>
+    );
+  }
+  if (b === 'claude' || /claude|anthropic/.test(name)) {
+    return <AiProviderLogo provider="claude" size={26} />;
+  }
+  if (b === 'openai' || /chatgpt|openai/.test(name)) {
+    return <AiProviderLogo provider="ChatGPT" size={26} />;
+  }
+  if (b === 'codex' || b === 'twocode' || /twocode|codex/.test(name)) {
+    return (
+      <div className="notif-custom-app-badge" style={{ background: 'linear-gradient(135deg, #6198FF, #8A5CF6)' }}>
+        <span className="notif-badge-letter">2</span>
+      </div>
+    );
+  }
+  if (b === 'antigravity' || /antigravity/.test(name)) {
+    return <RealAppIcon sc={{ id: 'antigravity-agent-mark', type: 'antigravity' }} size={26} />;
+  }
+  if (b === 'ghelper' || /ghelper|g-helper/.test(name)) {
+    return (
+      <div className="notif-custom-app-badge" style={{ background: 'linear-gradient(135deg, #38A6FF, #00B874)' }}>
+        <span className="notif-badge-letter">G</span>
+      </div>
+    );
+  }
+  if (b === 'mail' || /mail|posta/.test(name)) {
+    return (
+      <div className="notif-custom-app-badge" style={{ background: 'linear-gradient(135deg, #0078D4, #4285F4)' }}>
+        <Mail size={17} strokeWidth={2.4} color="#ffffff" />
+      </div>
+    );
+  }
+
+  // Universal dynamic monogram tile for all other applications
+  const effectiveName = appName || banner?.app || banner?.title || 'App';
+  const initial = String(effectiveName).trim().charAt(0).toLocaleUpperCase('tr-TR') || 'A';
+  const grad = generateAppGradient(effectiveName);
+
+  return (
+    <div
+      className="notif-custom-app-badge"
+      style={{
+        background: `linear-gradient(135deg, ${grad.hex}, ${grad.secondaryHex})`,
+      }}
+    >
+      <span className="notif-badge-letter">{initial}</span>
+    </div>
+  );
 }
 function RoboDockIcon({ size = 15 }) {
   return (
@@ -378,6 +705,19 @@ const MODE_OPTIONS = [
   { id: 'Game', label: 'Game', icon: Gamepad2, color: '#ffad66' },
   { id: 'Serbest', label: 'Serbest', icon: Radio, color: '#75e6ad' },
 ];
+
+const GHELPER_PERF_MODES = {
+  0: { name: 'Dengeli', color: '#38a6ff', icon: Car },
+  1: { name: 'Turbo', color: '#ff453a', icon: Rocket },
+  2: { name: 'Sessiz', color: '#64d2ff', icon: Bike },
+};
+
+const GHELPER_GPU_MODES = {
+  0: { name: 'Eko', color: '#00b874', icon: Leaf },
+  1: { name: 'Standart', color: '#0a84ff', icon: Flower2 },
+  2: { name: 'Ultimate', color: '#ff453a', icon: Gamepad2 },
+  3: { name: 'Optimize', color: '#ffd60a', icon: RotateCw },
+};
 
 const MAIL_FOLDERS = [
   { id: 'primary', label: 'Öncelikli', countKey: 'primary', icon: Inbox, url: 'https://mail.google.com/mail/u/0/#inbox' },
@@ -429,9 +769,54 @@ const HOME_LAYOUTS = [
   { id: 'minimal', name: 'Minimal' },
 ];
 
+function renderTooltipContent(text) {
+  if (!text) return null;
+
+  // Format "Title (Hint)" - e.g. "Ses Kontrolü (Tıkla: Sessize Al, Tekerlek: Ses Aç/Kıs)"
+  const parenMatch = text.match(/^(.*?)\s*\((.*?)\)$/);
+  if (parenMatch) {
+    const mainTitle = parenMatch[1].trim();
+    const hint = parenMatch[2].trim();
+    return (
+      <div className="modern-tooltip-inner">
+        <span className="modern-tooltip-main">{mainTitle}</span>
+        <span className="modern-tooltip-kbd">{hint}</span>
+      </div>
+    );
+  }
+
+  // Format "Category: Value" - e.g. "G-Helper Performans: Turbo" or "G-Helper GPU: Eko"
+  if (text.includes(': ') && !text.startsWith('http')) {
+    const idx = text.indexOf(': ');
+    const label = text.slice(0, idx).trim();
+    const value = text.slice(idx + 2).trim();
+    return (
+      <div className="modern-tooltip-inner">
+        <span className="modern-tooltip-label">{label}</span>
+        <span className="modern-tooltip-pill">{value}</span>
+      </div>
+    );
+  }
+
+  // Format "Primary · Secondary"
+  if (text.includes(' · ')) {
+    const parts = text.split(' · ');
+    return (
+      <div className="modern-tooltip-inner">
+        <span className="modern-tooltip-main">{parts[0]}</span>
+        <span className="modern-tooltip-sep">•</span>
+        <span className="modern-tooltip-sub">{parts.slice(1).join(' · ')}</span>
+      </div>
+    );
+  }
+
+  return <span className="modern-tooltip-main">{text}</span>;
+}
+
 export default function App() {
   // Island mode: 'idle' | 'mini-progress' | 'battery' | 'music-bar' | 'expanded'
   const [islandMode, setIslandMode] = useState('idle');
+  const [gameModeActive, setGameModeActive] = useState(false);
   // Right-click thin progress bar toggle
   const [isMiniProgressBar, setIsMiniProgressBar] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
@@ -445,6 +830,7 @@ export default function App() {
   const [notificationHistory, setNotificationHistory] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('twocode-notification-history') || '[]')
+        .filter(shouldPersistNotification)
         .slice(0, 100)
         .map((item) => ({ ...item, isRead: item.isRead !== false }));
     }
@@ -465,7 +851,7 @@ export default function App() {
   const [batteryDelta] = useState(-10);
   const [batteryPercent, setBatteryPercent] = useState(80);
   const [batteryCharging, setBatteryCharging] = useState(false);
-  const [batteryAlertKind, setBatteryAlertKind] = useState('low');
+  const [batteryAlertKind, setBatteryAlertKind] = useState('charging');
   const [isCustomizingClock, setIsCustomizingClock] = useState(false);
   const [clockFontIndex, setClockFontIndex] = useState(() => {
     const value = Number(readClockPreferences().fontIndex);
@@ -481,6 +867,99 @@ export default function App() {
   const [clockShowSeconds, setClockShowSeconds] = useState(() => readClockPreferences().showSeconds === true);
   const [textFontIndex, setTextFontIndex] = useState(() => readTypographyPreferences().textFontIndex);
   const [showClockAdvanced, setShowClockAdvanced] = useState(false);
+
+  // Modern Sleek Global Tooltip State
+  const [tooltipState, setTooltipState] = useState({
+    visible: false,
+    text: '',
+    x: 0,
+    y: 0,
+    placement: 'bottom',
+  });
+  const tooltipTimerRef = useRef(null);
+  const activeTooltipElRef = useRef(null);
+  const tooltipWarmRef = useRef(false);
+  const tooltipWarmTimerRef = useRef(null);
+
+  useEffect(() => {
+    const handlePointerOver = (e) => {
+      const target = e.target?.closest?.('[title], [data-tooltip], [data-modern-tooltip]');
+      if (!target || target.closest('[data-no-tooltip]')) return;
+
+      let text = target.getAttribute('data-modern-tooltip') || target.getAttribute('data-tooltip');
+      if (!text && target.hasAttribute('title')) {
+        text = target.getAttribute('title');
+        target.setAttribute('data-modern-tooltip', text);
+        target.removeAttribute('title');
+      }
+
+      if (!text || !text.trim()) return;
+
+      if (activeTooltipElRef.current === target && tooltipState.visible) {
+        return;
+      }
+
+      activeTooltipElRef.current = target;
+      clearTimeout(tooltipTimerRef.current);
+
+      const show = () => {
+        if (activeTooltipElRef.current !== target) return;
+        const rect = target.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const placement = rect.top < 100 ? 'bottom' : 'top';
+        const y = placement === 'bottom' ? rect.bottom + 7 : rect.top - 7;
+
+        setTooltipState({
+          visible: true,
+          text,
+          x,
+          y,
+          placement,
+        });
+
+        tooltipWarmRef.current = true;
+        clearTimeout(tooltipWarmTimerRef.current);
+      };
+
+      const delay = tooltipWarmRef.current ? 40 : 200;
+      tooltipTimerRef.current = setTimeout(show, delay);
+    };
+
+    const hideTooltip = () => {
+      clearTimeout(tooltipTimerRef.current);
+      activeTooltipElRef.current = null;
+      setTooltipState((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+
+      clearTimeout(tooltipWarmTimerRef.current);
+      tooltipWarmTimerRef.current = setTimeout(() => {
+        tooltipWarmRef.current = false;
+      }, 350);
+    };
+
+    const handlePointerOut = (e) => {
+      if (activeTooltipElRef.current && !e.relatedTarget?.closest?.('[data-modern-tooltip], [data-tooltip], [title]')) {
+        hideTooltip();
+      }
+    };
+
+    const handlePointerDown = () => {
+      hideTooltip();
+    };
+
+    document.addEventListener('pointerover', handlePointerOver, true);
+    document.addEventListener('pointerout', handlePointerOut, true);
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    window.addEventListener('scroll', hideTooltip, true);
+
+    return () => {
+      document.removeEventListener('pointerover', handlePointerOver, true);
+      document.removeEventListener('pointerout', handlePointerOut, true);
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      window.removeEventListener('scroll', hideTooltip, true);
+      clearTimeout(tooltipTimerRef.current);
+      clearTimeout(tooltipWarmTimerRef.current);
+    };
+  }, [tooltipState.visible]);
 
   useEffect(() => {
     localStorage.setItem('twocode-clock-preferences', JSON.stringify({
@@ -542,6 +1021,7 @@ export default function App() {
   const [roboMood, setRoboMood] = useState('normal');
   const [roboReaction, setRoboReaction] = useState(null);
   const [documentVisible, setDocumentVisible] = useState(() => document.visibilityState !== 'hidden');
+  const appMountedAtRef = useRef(Date.now());
   const roboReactionRef = useRef(null);
   const roboReactionTimerRef = useRef(null);
   const roboReactionKeyRef = useRef(0);
@@ -556,6 +1036,7 @@ export default function App() {
   const [claudeHistory, setClaudeHistory] = useState([]);
   const [geminiHistory, setGeminiHistory] = useState([]);
   const [antigravityHistory, setAntigravityHistory] = useState([]);
+  const [agentActivity, setAgentActivity] = useState([]);
   const [pendingApproval, setPendingApproval] = useState(null);
   const [activeHookTask, setActiveHookTask] = useState(null);
 
@@ -564,6 +1045,37 @@ export default function App() {
   const [roboReply, setRoboReply] = useState(null);
   const [roboReplyProvider, setRoboReplyProvider] = useState(null);
   const [roboLoading, setRoboLoading] = useState(false);
+
+  // G-Helper live status (performance_mode & gpu_mode)
+  const [ghelperStatus, setGhelperStatus] = useState({
+    performanceMode: 0,
+    performanceName: 'Dengeli',
+    gpuMode: 0,
+    gpuName: 'Standart',
+    gpuAuto: false,
+  });
+
+  useEffect(() => {
+    let mounted = true;
+    if (window.twocode?.getGHelperStatus) {
+      window.twocode.getGHelperStatus().then((status) => {
+        if (mounted && status) {
+          setGhelperStatus((prev) => ({ ...prev, ...status }));
+        }
+      });
+    }
+
+    const unsub = window.twocode?.onGHelperStatusUpdate?.((status) => {
+      if (mounted && status) {
+        setGhelperStatus((prev) => ({ ...prev, ...status }));
+      }
+    });
+
+    return () => {
+      mounted = false;
+      if (unsub) unsub();
+    };
+  }, []);
 
   const triggerRoboReaction = useCallback((name, priority = 2, duration = 1250) => {
     if (!name || document.visibilityState === 'hidden') return;
@@ -621,11 +1133,12 @@ export default function App() {
   }, [timerRunning, timerSeconds, focusMinutes, triggerRoboReaction]);
 
   useEffect(() => {
-    if (batteryCharging && !previousBatteryChargingRef.current) {
+    const isStartup = Date.now() - appMountedAtRef.current < 5000;
+    if (batteryCharging && !previousBatteryChargingRef.current && !isStartup) {
       triggerRoboReaction('charging', 4, 1450);
     }
     const isLow = batteryPercent <= 20 && !batteryCharging;
-    if (isLow && !previousBatteryLowRef.current) {
+    if (isLow && !previousBatteryLowRef.current && !isStartup) {
       triggerRoboReaction('battery-low', 4, 1450);
     }
     previousBatteryChargingRef.current = batteryCharging;
@@ -821,14 +1334,19 @@ export default function App() {
   const hudTimerRef = useRef(null);
   const hudVisibleTimerRef = useRef(null);
   const notifTimerRef = useRef(null);
+  const notifRemainingMsRef = useRef(0);
+  const notifTimerStartedAtRef = useRef(0);
+  const notifPrevModeRef = useRef('idle');
   const isShowingNotifToastRef = useRef(false);
   const hoverExpandTimerRef = useRef(null);
+  const suppressGHelperHudUntilRef = useRef(0);
 
   // Live Windows System HUD (Volume & Screen Brightness) and Windows Notification Toast state
   const [hudOverlay, setHudOverlay] = useState({
     type: 'volume',
     value: 68,
     muted: false,
+    ghelper: null,
   });
   const [isSystemHudVisible, setIsSystemHudVisible] = useState(false);
   const [toastBanner, setToastBanner] = useState({
@@ -852,6 +1370,15 @@ export default function App() {
     setIslandMode((mode) => mode === 'notif-toast' ? resolvedCollapsedModeRef.current : mode);
   };
   const notifLogoAccent = useDominantColor(toastBanner.logo);
+  useEffect(() => {
+    if (!toastBanner.id || !notifLogoAccent.isLiveCover) return;
+    const logoAccent = { rgb: notifLogoAccent.rgb, hex: notifLogoAccent.hex, isLiveCover: true };
+    setNotificationHistory((items) => items.map((item) => (
+      item.id === toastBanner.id && !item.logoAccent?.isLiveCover
+        ? { ...item, logoAccent }
+        : item
+    )));
+  }, [toastBanner.id, notifLogoAccent.rgb, notifLogoAccent.hex, notifLogoAccent.isLiveCover]);
   const notifBrand = useMemo(
     () => resolveNotifBrand(toastBanner, notifLogoAccent),
     [toastBanner, notifLogoAccent]
@@ -863,15 +1390,18 @@ export default function App() {
 
   const liveMediaRef = useRef(liveMedia);
   liveMediaRef.current = liveMedia;
+  const scrubberTrackRef = useRef(null);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPosition, setScrubPosition] = useState(null);
   const [smoothPosition, setSmoothPosition] = useState(0);
   const lastMediaTickRef = useRef(Date.now());
 
   useEffect(() => {
-    if (liveMedia && typeof liveMedia.position === 'number') {
+    if (!isScrubbing && liveMedia && typeof liveMedia.position === 'number') {
       setSmoothPosition(liveMedia.position);
       lastMediaTickRef.current = Date.now();
     }
-  }, [liveMedia?.position, liveMedia?.title]);
+  }, [liveMedia?.position, liveMedia?.title, isScrubbing]);
 
   // Advance by real elapsed time so lyric timing stays locked to the media clock.
   useEffect(() => {
@@ -879,6 +1409,7 @@ export default function App() {
       const now = Date.now();
       const elapsed = Math.min(1, Math.max(0, (now - lastMediaTickRef.current) / 1000));
       lastMediaTickRef.current = now;
+      if (isScrubbing) return;
       const media = liveMediaRef.current;
       if (!media || !media.hasSession || !media.isPlaying) return;
       setSmoothPosition((prev) => {
@@ -887,7 +1418,7 @@ export default function App() {
       });
     }, 250);
     return () => clearInterval(mediaTick);
-  }, []);
+  }, [isScrubbing]);
 
   // Active media comes strictly from live Windows SMTC with sub-second smooth position
   const currentMedia = useMemo(() => {
@@ -977,6 +1508,8 @@ export default function App() {
   // IMPORTANT: Only show music-bar when media is actively playing (`currentMedia.isPlaying`).
   // When paused or stopped, return to Robo's glowing eyes (`idle`).
   const resolvedCollapsedMode = useMemo(() => {
+    // Fullscreen Game Mode keeps Robo visible even when a browser video has an SMTC session.
+    if (gameModeActive) return 'idle';
     const isActivelyPlaying = Boolean(currentMedia.hasSession && currentMedia.isPlaying);
     if (isMiniProgressBar && isActivelyPlaying) {
       return 'mini-progress';
@@ -990,6 +1523,7 @@ export default function App() {
     return 'idle';
   }, [
     isMiniProgressBar,
+    gameModeActive,
     timerRunning,
     currentMedia.hasSession,
     currentMedia.isPlaying,
@@ -1085,22 +1619,25 @@ export default function App() {
         if (current === 'expanded') return current;
         return 'battery';
       });
+      playRoboSound('surprised', islandSettings.soundEffects !== false);
     };
 
     const triggerChargingAlert = () => {
       setBatteryCharging(true);
       setBatteryAlertKind('charging');
       setIslandMode((current) => (current === 'expanded' ? current : 'battery'));
+      playRoboSound('happy', islandSettings.soundEffects !== false);
     };
 
     const handleBatteryChange = () => {
       if (!batteryObj) return;
+      const isStartup = Date.now() - appMountedAtRef.current < 5000;
       const nextPct = Math.round(batteryObj.level * 100);
       setBatteryPercent(nextPct);
 
       if (batteryObj.charging) {
         setBatteryCharging(true);
-        if (wasCharging === false) triggerChargingAlert();
+        if (wasCharging === false && !isStartup) triggerChargingAlert();
         wasCharging = true;
         hasShown20AlertRef.current = false;
         return;
@@ -1113,7 +1650,7 @@ export default function App() {
         return;
       }
 
-      if (nextPct === 20 && !batteryObj.charging && !hasShown20AlertRef.current) {
+      if (nextPct === 20 && !batteryObj.charging && !hasShown20AlertRef.current && !isStartup) {
         hasShown20AlertRef.current = true;
         triggerBatteryAlert(nextPct);
       }
@@ -1125,14 +1662,12 @@ export default function App() {
         .then((bat) => {
           batteryObj = bat;
           wasCharging = Boolean(bat.charging);
+          previousBatteryChargingRef.current = wasCharging;
           setBatteryCharging(wasCharging);
           const pct = Math.round(bat.level * 100);
           if (pct > 0 && pct <= 100) {
             setBatteryPercent(pct);
-            if (pct === 20 && !bat.charging && !hasShown20AlertRef.current) {
-              hasShown20AlertRef.current = true;
-              batteryTimerRef.current = setTimeout(() => triggerBatteryAlert(pct), 1400);
-            }
+            previousBatteryLowRef.current = pct <= 20 && !wasCharging;
           }
           bat.addEventListener('levelchange', handleBatteryChange);
           bat.addEventListener('chargingchange', handleBatteryChange);
@@ -1171,6 +1706,58 @@ export default function App() {
   // Connect to Electron IPC bridges
   useEffect(() => {
     if (!window.twocode) return;
+
+    const showIslandNotification = (notif) => {
+      if (!notif || (!notif.title && !notif.body)) return;
+      if (islandSettings.doNotDisturb || islandSettings.windowsNotifications === false) return;
+      const isGHelperFeedback = /^(ghelper|g-helper)$/i.test(`${notif.app || ''}`) || /(?:^|[\s_-])g-?helper(?:$|[\s_-])/i.test(`${notif.appId || ''}`);
+      if (!notif.isAgentActivity && !isGHelperFeedback && modeToggles.onlyClaude && !/claude|anthropic/i.test(`${notif.app || ''} ${notif.appId || ''}`)) return;
+      const notifId = notif.id || `notification_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const notification = {
+        id: notifId,
+        app: notif.app || 'Windows',
+        appId: notif.appId || '',
+        accentHex: notif.accentHex || '',
+        accentRgb: notif.accentRgb || '',
+        accentSecondaryHex: notif.accentSecondaryHex || '',
+        accentSecondaryRgb: notif.accentSecondaryRgb || '',
+        logo: notif.logo || '',
+        profileImage: notif.profileImage || notif.avatar || '',
+        sender: notif.sender || '',
+        notificationKind: notif.notificationKind || '',
+        callKind: notif.callKind || '',
+        title: notif.title || notif.app || 'Notification',
+        body: notif.body || '',
+        targetUrl: notif.targetUrl || '',
+        isAgentActivity: Boolean(notif.isAgentActivity),
+      };
+
+      setToastBanner(notification);
+      if (shouldPersistNotification(notification)) {
+        setNotificationHistory((items) => [{ ...notification, timestamp: Date.now(), isRead: false }, ...items.filter((item) => item.id !== notifId)].slice(0, 100));
+      }
+      playNotifSound(islandSettings.notifSound || 'Ding', islandSettings.soundEffects !== false);
+      setRoboMood('surprised');
+      triggerRoboReaction('notification', 4, 1450);
+      setTimeout(() => setRoboMood('normal'), 2600);
+
+      const stayMs = Math.max(3000, (Number(islandSettings.notifDurationSec) || 5) * 1000);
+      isShowingNotifToastRef.current = true;
+      setIslandMode((curr) => {
+        const prevMode = curr === 'notif-toast' ? resolvedCollapsedModeRef.current : curr;
+        if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
+        notifPrevModeRef.current = prevMode;
+        notifRemainingMsRef.current = stayMs;
+        notifTimerStartedAtRef.current = Date.now();
+        notifTimerRef.current = setTimeout(() => {
+          isShowingNotifToastRef.current = false;
+          notifRemainingMsRef.current = 0;
+          notifTimerRef.current = null;
+          setIslandMode(prevMode);
+        }, stayMs);
+        return 'notif-toast';
+      });
+    };
 
     window.twocode.getSettings?.().then((saved) => {
       if (saved && typeof saved === 'object') {
@@ -1244,6 +1831,7 @@ export default function App() {
     });
 
     const unsubHover = window.twocode.onNotchHoverChange?.((hovering) => {
+      if (gameModeActive) return;
       if (isShowingNotifToastRef.current) return;
       if (hovering) {
         if (!isMiniProgressBar) {
@@ -1259,6 +1847,20 @@ export default function App() {
         }
       }
     });
+
+    const handleGameModeChange = (active) => {
+      setGameModeActive(Boolean(active));
+      if (active) {
+        setIslandMode('idle');
+        setShowMenu(false);
+        setNotificationHistoryOpen(false);
+        setShowMusicServicePicker(false);
+      } else {
+        setIslandMode(resolvedCollapsedModeRef.current);
+      }
+    };
+    const unsubGameMode = window.twocode.onGameModeChange?.(handleGameModeChange);
+    window.twocode.isGameModeActive?.().then(handleGameModeChange).catch(() => {});
 
     const unsubMedia = window.twocode.onMediaUpdate((data) => {
       const nextMedia = data || { hasSession: false, isPlaying: false };
@@ -1294,23 +1896,22 @@ export default function App() {
     });
 
     const unsubAgent = window.twocode.onAgentEvent((ev) => {
-      const timeStr = new Date().toLocaleTimeString('tr-TR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
       const newEntry = {
-        id: ev.id,
+        id: ev.id || `agent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         agent: ev.agent || selectedAiProvider,
-        title: ev.command || ev.title,
-        time: timeStr,
-        status: ev.type === 'approval' ? 'pending' : 'done',
+        title: ev.detail || ev.title || ev.command || '',
+        detail: ev.detail || '',
+        time: new Date(ev.timestamp || Date.now()).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+        type: ev.type || 'active',
       };
       setActiveHookTask(newEntry);
-      if ((ev.agent || '').toLowerCase().includes('claude')) {
-        setClaudeHistory((prev) => [newEntry, ...prev].slice(0, 15));
-      } else {
-        setCodexHistory((prev) => [newEntry, ...prev].slice(0, 15));
-      }
+      setAgentActivity((items) => [newEntry, ...items.filter((item) => item.id !== newEntry.id)].slice(0, 12));
+
+      const agentId = (ev.agent || '').toLowerCase();
+      if (ev.type === 'done' && agentId.includes('claude')) setClaudeHistory((prev) => [newEntry, ...prev].slice(0, 15));
+      else if (ev.type === 'done' && agentId.includes('antigravity')) setAntigravityHistory((prev) => [newEntry, ...prev].slice(0, 15));
+      else if (ev.type === 'done' && agentId.includes('gemini')) setGeminiHistory((prev) => [newEntry, ...prev].slice(0, 15));
+      else if (ev.type === 'done') setCodexHistory((prev) => [newEntry, ...prev].slice(0, 15));
 
       if (ev.type === 'approval') {
         setPendingApproval(ev);
@@ -1319,12 +1920,12 @@ export default function App() {
         setIslandMode('expanded');
         setActiveTab('code');
         playRoboSound('curious', true);
-      } else if (ev.type === 'done') {
-        setJobsToday((j) => j + 1);
+      } else {
+        if (ev.type === 'done') setJobsToday((j) => j + 1);
+      }
+      if (ev.type === 'done') {
         setRoboMood('happy');
         triggerRoboReaction('success', 3, 1450);
-        playNotifSound(islandSettings.notifSound || 'Ding', true);
-        playRoboSound('happy', true);
       }
     });
 
@@ -1339,10 +1940,23 @@ export default function App() {
         if (typeof hud.value === 'number') setVolumePercent(hud.value);
         if (typeof hud.muted === 'boolean') setIsMuted(hud.muted);
       }
+      if (hud.type === 'ghelper') {
+        if (hud.ghelper?.category === 'mode' && typeof hud.ghelper.modeIndex === 'number') {
+          setGhelperStatus((prev) => ({
+            ...prev,
+            performanceMode: hud.ghelper.modeIndex,
+            performanceName: hud.ghelper.valueText || prev.performanceName,
+          }));
+        }
+        if (Date.now() < suppressGHelperHudUntilRef.current) {
+          return;
+        }
+      }
       setHudOverlay({
-        type: hud.type === 'brightness' ? 'brightness' : 'volume',
+        type: hud.type === 'brightness' ? 'brightness' : hud.type === 'ghelper' ? 'ghelper' : 'volume',
         value: typeof hud.value === 'number' ? hud.value : 0,
         muted: Boolean(hud.muted),
+        ghelper: hud.ghelper || null,
       });
       setIsSystemHudVisible(true);
       if (hudVisibleTimerRef.current) clearTimeout(hudVisibleTimerRef.current);
@@ -1357,60 +1971,14 @@ export default function App() {
       });
     });
 
-    const unsubWinNotif = window.twocode.onWindowsNotification?.((notif) => {
-      if (!notif || (!notif.title && !notif.body)) return;
-      if (islandSettings.doNotDisturb) return;
-      if (islandSettings.windowsNotifications === false) return;
-      if (modeToggles.onlyClaude && !/claude|anthropic/i.test(`${notif.app || ''} ${notif.appId || ''}`)) return;
-      const notifId = notif.id || `notification_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-      setToastBanner({
-        id: notifId,
-        app: notif.app || 'Windows',
-        appId: notif.appId || '',
-        logo: notif.logo || '',
-        profileImage: notif.profileImage || notif.avatar || '',
-        sender: notif.sender || '',
-        notificationKind: notif.notificationKind || '',
-        callKind: notif.callKind || '',
-        title: notif.title || notif.app || 'Notification',
-        body: notif.body || '',
-        targetUrl: notif.targetUrl || '',
-      });
-      setNotificationHistory((items) => [{
-        id: notifId,
-        app: notif.app || 'Windows', appId: notif.appId || '', logo: notif.logo || '',
-        profileImage: notif.profileImage || notif.avatar || '', sender: notif.sender || '',
-        notificationKind: notif.notificationKind || '', callKind: notif.callKind || '',
-        title: notif.title || notif.app || 'Notification', body: notif.body || '',
-        targetUrl: notif.targetUrl || '', timestamp: Date.now(), isRead: false,
-      }, ...items.filter((item) => item.id !== notifId)].slice(0, 100));
-      playNotifSound(
-        islandSettings.notifSound || 'Ding',
-        islandSettings.soundEffects !== false
-      );
-      setRoboMood('surprised');
-      triggerRoboReaction('notification', 4, 1450);
-      setTimeout(() => setRoboMood('normal'), 2600);
-
-      const stayMs = Math.max(3000, (Number(islandSettings.notifDurationSec) || 5) * 1000);
-      isShowingNotifToastRef.current = true;
-      setIslandMode((curr) => {
-        const prevMode = curr === 'notif-toast' ? resolvedCollapsedModeRef.current : curr;
-        if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
-        notifTimerRef.current = setTimeout(() => {
-          isShowingNotifToastRef.current = false;
-          setIslandMode(prevMode);
-        }, stayMs);
-        return 'notif-toast';
-      });
-    });
+    const unsubWinNotif = window.twocode.onWindowsNotification?.(showIslandNotification);
 
     return () => {
       if (unsubSettings) unsubSettings();
       if (unsubEmotion) unsubEmotion();
       if (unsubAiHist) unsubAiHist();
       if (unsubHover) unsubHover();
+      if (unsubGameMode) unsubGameMode();
       if (unsubMedia) unsubMedia();
       if (unsubClip) unsubClip();
       if (unsubAgent) unsubAgent();
@@ -1424,6 +1992,7 @@ export default function App() {
     triggerRoboReaction,
     pendingApproval,
     resolvedCollapsedMode,
+    gameModeActive,
     isMiniProgressBar,
     islandSettings.notifSound,
     islandSettings.soundEffects,
@@ -1559,6 +2128,61 @@ export default function App() {
     if (e) e.stopPropagation();
     playRoboSound('tap', islandSettings.soundEffects !== false);
     window.twocode?.mediaControl('prev');
+  };
+
+  const calculateScrubSeconds = (clientX) => {
+    if (!scrubberTrackRef.current || !currentMedia.duration || currentMedia.duration <= 0) return null;
+    const rect = scrubberTrackRef.current.getBoundingClientRect();
+    if (rect.width <= 0) return null;
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return ratio * currentMedia.duration;
+  };
+
+  const handleScrubberMouseDown = (e) => {
+    if (!currentMedia.hasSession || !currentMedia.duration || currentMedia.duration <= 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsScrubbing(true);
+    const sec = calculateScrubSeconds(e.clientX);
+    if (sec !== null) {
+      setScrubPosition(sec);
+      setSmoothPosition(sec);
+    }
+
+    const handleMouseMove = (moveEvent) => {
+      const moveSec = calculateScrubSeconds(moveEvent.clientX);
+      if (moveSec !== null) {
+        setScrubPosition(moveSec);
+        setSmoothPosition(moveSec);
+      }
+    };
+
+    const handleMouseUp = (upEvent) => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      setIsScrubbing(false);
+      const finalSec = calculateScrubSeconds(upEvent.clientX);
+      if (finalSec !== null) {
+        setScrubPosition(null);
+        setSmoothPosition(finalSec);
+        window.twocode?.mediaControl?.('seek', finalSec);
+      } else {
+        setScrubPosition(null);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleScrubberClick = (e) => {
+    if (!currentMedia.hasSession || !currentMedia.duration || currentMedia.duration <= 0) return;
+    e.stopPropagation();
+    const sec = calculateScrubSeconds(e.clientX);
+    if (sec !== null) {
+      setSmoothPosition(sec);
+      window.twocode?.mediaControl?.('seek', sec);
+    }
   };
 
   const updateRulerMinutes = (clientX) => {
@@ -1703,18 +2327,7 @@ export default function App() {
     // { id: 'inbox', label: 'MAIL', icon: Mail },
   ];
 
-  const activeRecentJobs = useMemo(() => {
-    if (selectedAiProvider === 'Claude' && claudeHistory.length > 0) {
-      return claudeHistory;
-    }
-    if (selectedAiProvider === 'Gemini' && geminiHistory.length > 0) {
-      return geminiHistory;
-    }
-    if (selectedAiProvider === 'Antigravity' && antigravityHistory.length > 0) {
-      return antigravityHistory;
-    }
-    return codexHistory;
-  }, [selectedAiProvider, claudeHistory, geminiHistory, antigravityHistory, codexHistory]);
+  const activeRecentJobs = agentActivity;
 
   const progressPercent =
     currentMedia.duration > 0
@@ -1794,16 +2407,34 @@ export default function App() {
         ref={morphShellRef}
         className={`notch-morph-shell state-${islandMode} mode-${activeTab} ${batteryAlertKind === 'charging' ? 'is-charging' : ''} ${
           activeTab === 'home' && isCustomizingClock ? 'customizing-clock' : ''
-        } ${musicAccent.hasColor ? 'has-cover-color' : ''}`}
+        } ${musicAccent.hasColor ? 'has-cover-color' : ''} ${
+          islandMode === 'hud' && hudOverlay.ghelper?.category === 'aura'
+            ? `has-aura-hud effect-${hudOverlay.ghelper.effectType || 'static'}`
+            : ''
+        }`}
         style={{
           '--music-accent-rgb': musicAccent.rgb,
           '--music-accent-hex': musicAccent.hex,
           '--notif-accent-rgb': notifBrand.rgb,
           '--notif-accent-hex': notifBrand.hex,
+          '--notif-accent-secondary-rgb': notifBrand.secondaryRgb || notifBrand.rgb,
+          '--notif-accent-secondary-hex': notifBrand.secondaryHex || notifBrand.hex,
           '--robo-eye-color': islandSettings.eyeColorHex || '#ffffff',
           '--dynamic-music-w': `${dynamicMusicBarWidth}px`,
+          ...(hudOverlay.ghelper?.color ? {
+            '--ghelper-aura-color': hudOverlay.ghelper.color,
+            '--ghelper-aura-color2': hudOverlay.ghelper.color2 || hudOverlay.ghelper.color,
+            '--ghelper-aura-gradient': hudOverlay.ghelper.gradient || `linear-gradient(135deg, ${hudOverlay.ghelper.color}, ${hudOverlay.ghelper.color2 || hudOverlay.ghelper.color})`,
+          } : {}),
+          ...(hudOverlay.ghelper?.category === 'mode' ? {
+            '--hud-mode-color': (GHELPER_PERF_MODES[typeof hudOverlay.ghelper.modeIndex === 'number' ? hudOverlay.ghelper.modeIndex : ghelperStatus.performanceMode] || GHELPER_PERF_MODES[0]).color,
+          } : {}),
+          ...(hudOverlay.ghelper?.category === 'gpu' ? {
+            '--hud-mode-color': (GHELPER_GPU_MODES[typeof hudOverlay.ghelper.gpuIndex === 'number' ? hudOverlay.ghelper.gpuIndex : ghelperStatus.gpuMode] || GHELPER_GPU_MODES[0]).color,
+          } : {}),
         }}
         onMouseEnter={() => {
+          if (gameModeActive || isShowingNotifToastRef.current) return;
           if (islandMode !== 'expanded' && !isMiniProgressBar) {
             if (hoverExpandTimerRef.current) clearTimeout(hoverExpandTimerRef.current);
             hoverExpandTimerRef.current = setTimeout(() => {
@@ -1816,6 +2447,7 @@ export default function App() {
             clearTimeout(hoverExpandTimerRef.current);
             hoverExpandTimerRef.current = null;
           }
+          if (gameModeActive) return;
           if (islandMode === 'expanded') {
             setShowMenu(false);
             setNotificationHistoryOpen(false);
@@ -1870,57 +2502,210 @@ export default function App() {
         </div>
 
         {/* ============================================================
-            COLLAPSED LAYER 2: LOW BATTERY ALERT NOTCH
+            COLLAPSED LAYER 2: BATTERY ALERT NOTCH (Charging & Low Battery)
             ============================================================ */}
-        <div className={`morph-layer layer-battery ${islandMode === 'battery' ? 'is-visible' : ''} ${batteryAlertKind === 'charging' ? 'is-charging' : ''}`}>
-          <div className="battery-alert-icon">
-            <svg width="24" height="14" viewBox="0 0 24 14" fill="none">
-              <rect x="1" y="1" width="19" height="12" rx="3" stroke="#ffffff" strokeWidth="1.8" />
-              {batteryAlertKind === 'charging' ? (
-                <path d="M12.7 2.8 8.2 7.5h3l-.5 3.7 4.6-5h-3l.4-3.4Z" fill="#ffffff" />
-              ) : (
-                <rect x="4" y="4" width="2.5" height="6" rx="1" fill="#ffffff" />
-              )}
-              <path d="M22 4.5V9.5" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </div>
-          <div className="battery-alert-text">
-            <strong>
-              {batteryAlertKind === 'charging' ? (
-                <>Charging · <span className="clock-number-text">{batteryPercent}%</span></>
-              ) : (
-                <>Only <span className="clock-number-text">{batteryPercent}%</span> battery left</>
-              )}
-            </strong>
-            <span>{batteryAlertKind === 'charging' ? 'Power connected' : 'Plug in your charger!'}</span>
-          </div>
+        <div
+          className={`morph-layer layer-battery ${islandMode === 'battery' ? 'is-visible' : ''} ${batteryAlertKind === 'charging' ? 'is-charging' : 'is-low'}`}
+          onClick={() => setIslandMode(resolvedCollapsedModeRef.current)}
+        >
+          {islandMode === 'battery' && (
+            <>
+              <div className="battery-alert-left">
+                <div className="battery-icon-badge">
+                  {batteryAlertKind === 'charging' ? (
+                    <div className="battery-charging-graphic">
+                      <svg className="battery-capsule-svg" width="32" height="18" viewBox="0 0 32 18" fill="none">
+                        <rect x="1" y="1" width="26" height="16" rx="4.5" stroke="#30D158" strokeWidth="2" />
+                        <rect x="3.5" y="3.5" width={Math.max(3.5, (21 * Math.min(100, Math.max(0, batteryPercent))) / 100)} height="11" rx="2.5" fill="#30D158" className="battery-fill-rect" />
+                        <path d="M29 6.5V11.5" stroke="#30D158" strokeWidth="2.2" strokeLinecap="round" />
+                      </svg>
+                      <div className="charging-bolt-glow">
+                        <svg className="charging-bolt-svg" width="13" height="17" viewBox="0 0 14 18" fill="none">
+                          <path d="M8.2 1L1.8 10H7.2L5.8 17L12.2 8H6.8L8.2 1Z" fill="#ffffff" />
+                        </svg>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="battery-low-graphic">
+                      <svg className="battery-capsule-svg" width="32" height="18" viewBox="0 0 32 18" fill="none">
+                        <rect x="1" y="1" width="26" height="16" rx="4.5" stroke="#FF453A" strokeWidth="2" />
+                        <rect x="3.5" y="3.5" width={Math.max(3.5, (21 * Math.min(25, Math.max(0, batteryPercent))) / 100)} height="11" rx="2.5" fill="#FF453A" className="battery-low-fill-rect" />
+                        <path d="M29 6.5V11.5" stroke="#FF453A" strokeWidth="2.2" strokeLinecap="round" />
+                      </svg>
+                      <div className="battery-warning-mark">!</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="battery-alert-center">
+                <div className="battery-alert-headline">
+                  <strong>
+                    {batteryAlertKind === 'charging' ? 'Şarj Ediliyor' : 'Düşük Pil'}
+                  </strong>
+                  <span className="battery-alert-pct-pill">
+                    %{batteryPercent}
+                  </span>
+                </div>
+                <span className="battery-alert-sub">
+                  {batteryAlertKind === 'charging' ? 'Güç kaynağı bağlandı' : 'Lütfen şarj aletini takın'}
+                </span>
+              </div>
+
+              <div className="battery-alert-right">
+                <div className="battery-mini-bar-wrap">
+                  <div className="battery-mini-bar-track">
+                    <div
+                      className="battery-mini-bar-fill"
+                      style={{ width: `${Math.min(100, Math.max(5, batteryPercent))}%` }}
+                    >
+                      {batteryAlertKind === 'charging' && <div className="battery-bar-shimmer" />}
+                    </div>
+                  </div>
+                  <span className="battery-mini-bar-label">
+                    {batteryAlertKind === 'charging' ? 'DOLUYOR' : 'KRİTİK'}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* ============================================================
             COLLAPSED LAYER 2B: SYSTEM VOLUME / BRIGHTNESS HUD NOTCH
             ============================================================ */}
-        <div className={`morph-layer layer-hud ${islandMode === 'hud' || isSystemHudVisible ? 'is-visible' : ''}`}>
-          <div className="hud-notch-icon">
-            {hudOverlay.type === 'brightness' ? (
-              <Sun size={17} strokeWidth={2.2} />
-            ) : hudOverlay.muted || hudOverlay.value === 0 ? (
-              <VolumeX size={17} strokeWidth={2.2} />
+        <div className={`morph-layer layer-hud ${hudOverlay.type === 'ghelper' ? 'is-ghelper' : ''} ${hudOverlay.ghelper?.category === 'aura' ? `is-aura effect-${hudOverlay.ghelper.effectType || 'static'}` : ''} ${islandMode === 'hud' || isSystemHudVisible ? 'is-visible' : ''}`}>
+          {hudOverlay.type === 'ghelper' && hudOverlay.ghelper ? (
+            hudOverlay.ghelper.category === 'aura' ? (
+              <div className={`hud-aura-clean effect-${hudOverlay.ghelper.effectType || 'static'}`}>
+                {/* 1. Animated Glowing Keyboard Icon */}
+                <div
+                  className="hud-aura-icon-box"
+                  style={{
+                    '--glow-color': hudOverlay.ghelper.color || '#00e5ff',
+                  }}
+                >
+                  <Keyboard size={17} strokeWidth={2.3} className="hud-aura-icon" />
+                </div>
+
+                {/* 2. Clean Minimalist Typography */}
+                <div className="hud-aura-text-row">
+                  <span className="hud-aura-label">{hudOverlay.ghelper.label || 'Laptop Klavyesi'}</span>
+                  <span className="hud-aura-val">{hudOverlay.ghelper.valueText || 'Sabit'}</span>
+                </div>
+
+                {/* 3. Fluid Animated Color Pill Visualizer */}
+                <div
+                  className={`hud-aura-pill effect-${hudOverlay.ghelper.effectType || 'static'}`}
+                  style={{
+                    '--pill-color': hudOverlay.ghelper.color || '#00e5ff',
+                    '--pill-color2': hudOverlay.ghelper.color2 || hudOverlay.ghelper.color || '#ff007f',
+                    '--pill-gradient': hudOverlay.ghelper.gradient || `linear-gradient(90deg, ${hudOverlay.ghelper.color || '#00e5ff'}, ${hudOverlay.ghelper.color2 || hudOverlay.ghelper.color || '#ff007f'})`,
+                  }}
+                >
+                  <div className="hud-aura-pill-flow" />
+                  <div className="hud-aura-pill-sheen" />
+                </div>
+              </div>
             ) : (
-              <Volume2 size={17} strokeWidth={2.2} />
-            )}
-          </div>
-          <span className="hud-notch-label">{hudOverlay.type === 'brightness' ? 'Parlaklık' : 'Ses'}</span>
-          <div className="hud-notch-track">
-            <div
-              className={`hud-notch-fill ${hudOverlay.type === 'brightness' ? 'is-brightness' : ''}`}
-              style={{
-                width: `${hudOverlay.muted ? 0 : Math.min(100, Math.max(0, hudOverlay.value))}%`,
-              }}
-            />
-          </div>
-          <span className="hud-notch-val">
-            {hudOverlay.muted ? 'Sessiz' : `${Math.round(hudOverlay.value)}%`}
-          </span>
+              <div
+                className={`hud-ghelper-wrap cat-${hudOverlay.ghelper.category} ${
+                  hudOverlay.ghelper.category === 'mode'
+                    ? `perf-mode-${typeof hudOverlay.ghelper.modeIndex === 'number' ? hudOverlay.ghelper.modeIndex : ghelperStatus.performanceMode}`
+                    : hudOverlay.ghelper.category === 'gpu'
+                    ? `gpu-mode-${typeof hudOverlay.ghelper.gpuIndex === 'number' ? hudOverlay.ghelper.gpuIndex : ghelperStatus.gpuMode}`
+                    : ''
+                } ${hudOverlay.ghelper.category === 'backlight' && hudOverlay.ghelper.level === 0 ? 'is-off' : ''}`}
+                style={{
+                  ...(hudOverlay.ghelper.category === 'mode' ? {
+                    '--mode-perf-color': (GHELPER_PERF_MODES[typeof hudOverlay.ghelper.modeIndex === 'number' ? hudOverlay.ghelper.modeIndex : ghelperStatus.performanceMode] || GHELPER_PERF_MODES[0]).color,
+                  } : {}),
+                  ...(hudOverlay.ghelper.category === 'gpu' ? {
+                    '--mode-gpu-color': (GHELPER_GPU_MODES[typeof hudOverlay.ghelper.gpuIndex === 'number' ? hudOverlay.ghelper.gpuIndex : ghelperStatus.gpuMode] || GHELPER_GPU_MODES[0]).color,
+                  } : {}),
+                }}
+              >
+                <div
+                  className={`hud-notch-icon is-ghelper-icon ${hudOverlay.ghelper.category === 'mic' && hudOverlay.ghelper.isMuted ? 'is-mic-muted' : ''}`}
+                >
+                  {hudOverlay.ghelper.icon === 'backlight' ? (
+                    <Sunrise size={18} strokeWidth={2.4} />
+                  ) : hudOverlay.ghelper.icon === 'mic-mute' ? (
+                    <MicOff size={18} strokeWidth={2.4} />
+                  ) : hudOverlay.ghelper.icon === 'mic' ? (
+                    <Mic size={18} strokeWidth={2.4} />
+                  ) : hudOverlay.ghelper.category === 'mode' || hudOverlay.ghelper.icon === 'mode' ? (
+                    (() => {
+                      const mIdx = typeof hudOverlay.ghelper.modeIndex === 'number' ? hudOverlay.ghelper.modeIndex : ghelperStatus.performanceMode;
+                      const ModeIcon = (GHELPER_PERF_MODES[mIdx] || GHELPER_PERF_MODES[0]).icon;
+                      return <ModeIcon size={18} strokeWidth={2.4} />;
+                    })()
+                  ) : hudOverlay.ghelper.category === 'gpu' || hudOverlay.ghelper.icon === 'gpu' ? (
+                    (() => {
+                      const gIdx = typeof hudOverlay.ghelper.gpuIndex === 'number' ? hudOverlay.ghelper.gpuIndex : ghelperStatus.gpuMode;
+                      const GpuIcon = (GHELPER_GPU_MODES[gIdx] || GHELPER_GPU_MODES[0]).icon;
+                      return <GpuIcon size={18} strokeWidth={2.4} />;
+                    })()
+                  ) : hudOverlay.ghelper.icon === 'touchpad' ? (
+                    <TouchpadIcon size={18} strokeWidth={2.4} />
+                  ) : hudOverlay.ghelper.icon === 'lock' ? (
+                    <Lock size={18} strokeWidth={2.4} />
+                  ) : (
+                    <Palette size={18} strokeWidth={2.4} />
+                  )}
+                </div>
+                <div className="hud-ghelper-info">
+                  <span className="hud-ghelper-label">{hudOverlay.ghelper.label}</span>
+                  <div className="hud-ghelper-val-row">
+                    {/* Backlight Level Dots */}
+                    {hudOverlay.ghelper.category === 'backlight' && typeof hudOverlay.ghelper.level === 'number' && (
+                      <div className="hud-level-dots">
+                        {[1, 2, 3].map((step) => (
+                          <span
+                            key={step}
+                            className={`hud-level-dot ${hudOverlay.ghelper.level >= step ? 'is-active' : ''}`}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Mic Pulsing State Dot */}
+                    {hudOverlay.ghelper.category === 'mic' && (
+                      <span className={`hud-mic-state-dot ${hudOverlay.ghelper.isMuted ? 'is-muted' : 'is-live'}`} />
+                    )}
+
+                    <span className={`hud-ghelper-val cat-${hudOverlay.ghelper.category}`}>
+                      {hudOverlay.ghelper.valueText}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )
+          ) : (
+            <>
+              <div className="hud-notch-icon">
+                {hudOverlay.type === 'brightness' ? (
+                  <Sun size={17} strokeWidth={2.2} />
+                ) : hudOverlay.muted || hudOverlay.value === 0 ? (
+                  <VolumeX size={17} strokeWidth={2.2} />
+                ) : (
+                  <Volume2 size={17} strokeWidth={2.2} />
+                )}
+              </div>
+              <span className="hud-notch-label">{hudOverlay.type === 'brightness' ? 'Parlaklık' : 'Ses'}</span>
+              <div className="hud-notch-track">
+                <div
+                  className={`hud-notch-fill ${hudOverlay.type === 'brightness' ? 'is-brightness' : ''}`}
+                  style={{
+                    width: `${hudOverlay.muted ? 0 : Math.min(100, Math.max(0, hudOverlay.value))}%`,
+                  }}
+                />
+              </div>
+              <span className="hud-notch-val">
+                {hudOverlay.muted ? 'Sessiz' : `${Math.round(hudOverlay.value)}%`}
+              </span>
+            </>
+          )}
         </div>
 
         {/* ============================================================
@@ -1932,6 +2717,27 @@ export default function App() {
           role="button"
           tabIndex={0}
           title="Uygulamayı aç"
+          onMouseEnter={() => {
+            if (!isShowingNotifToastRef.current || !notifTimerRef.current) return;
+            clearTimeout(notifTimerRef.current);
+            notifTimerRef.current = null;
+            notifRemainingMsRef.current = Math.max(
+              0,
+              notifRemainingMsRef.current - (Date.now() - notifTimerStartedAtRef.current)
+            );
+          }}
+          onMouseLeave={() => {
+            if (!isShowingNotifToastRef.current || notifTimerRef.current) return;
+            const remainingMs = Math.max(900, notifRemainingMsRef.current);
+            const prevMode = notifPrevModeRef.current;
+            notifTimerStartedAtRef.current = Date.now();
+            notifTimerRef.current = setTimeout(() => {
+              isShowingNotifToastRef.current = false;
+              notifRemainingMsRef.current = 0;
+              notifTimerRef.current = null;
+              setIslandMode(prevMode);
+            }, remainingMs);
+          }}
           onClick={() => openNotification(toastBanner)}
           onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') openNotification(toastBanner); }}
         >
@@ -2214,6 +3020,50 @@ export default function App() {
             <div className="topbar-right">
               {activeTab === 'home' && !islandOverlay && (
                 <>
+                  <div className="topbar-ghelper-group" role="group" aria-label="G-Helper Modları">
+                    {(() => {
+                      const perfMeta = GHELPER_PERF_MODES[ghelperStatus.performanceMode] || GHELPER_PERF_MODES[0];
+                      const PerfIcon = perfMeta.icon;
+                      return (
+                        <button
+                          type="button"
+                          className={`topbar-ghelper-btn perf-mode-${ghelperStatus.performanceMode}`}
+                          style={{ '--gh-color': perfMeta.color }}
+                          aria-label={`G-Helper Performans Modu: ${perfMeta.name}`}
+                          data-no-tooltip="true"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            suppressGHelperHudUntilRef.current = Date.now() + 6000;
+                            playRoboSound('tap', islandSettings.soundEffects !== false);
+                            window.twocode?.openGHelper?.();
+                          }}
+                        >
+                          <PerfIcon size={15} strokeWidth={2.2} />
+                        </button>
+                      );
+                    })()}
+                    {(() => {
+                      const gpuMeta = GHELPER_GPU_MODES[ghelperStatus.gpuMode] || GHELPER_GPU_MODES[0];
+                      const GpuIcon = gpuMeta.icon;
+                      return (
+                        <button
+                          type="button"
+                          className={`topbar-ghelper-btn gpu-mode-${ghelperStatus.gpuMode}`}
+                          style={{ '--gh-color': gpuMeta.color }}
+                          aria-label={`G-Helper GPU Modu: ${gpuMeta.name}`}
+                          data-no-tooltip="true"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            suppressGHelperHudUntilRef.current = Date.now() + 6000;
+                            playRoboSound('tap', islandSettings.soundEffects !== false);
+                            window.twocode?.openGHelper?.();
+                          }}
+                        >
+                          <GpuIcon size={15} strokeWidth={2.2} />
+                        </button>
+                      );
+                    })()}
+                  </div>
                   <button
                     type="button"
                     className="topbar-mode-btn"
@@ -2401,7 +3251,7 @@ export default function App() {
           </header>
 
           {notificationHistoryOpen && (
-              <section ref={notificationHistoryPanelRef} id="notification-history-panel" className="notification-history-panel" aria-label="Bildirim geçmişi" onClick={(event) => event.stopPropagation()}>
+              <section ref={notificationHistoryPanelRef} id="notification-history-panel" className="notification-history-panel" aria-label="Bildirim geçmişi" style={(() => { const newest = notificationHistory[0]; const accent = resolveNotifBrand(newest, newest?.logoAccent); return { '--notif-panel-rgb': accent.rgb, '--notif-panel-hex': accent.hex }; })()} onClick={(event) => event.stopPropagation()}>
                 <header className="notification-history-header">
                   <div className="notification-history-heading">
                     <span className="notification-history-icon"><Bell size={15} /></span>
@@ -2414,7 +3264,15 @@ export default function App() {
                 </header>
                 <div className="notification-history-list">
                   {notificationHistory.length ? notificationHistory.map((item) => (
-                    <div className="notification-history-item" key={item.id}>
+                    <div
+                      className={`notification-history-item ${item.isRead ? '' : 'is-unread'}`}
+                      key={item.id}
+                      style={(() => {
+                        const accent = resolveNotifBrand(item, item.logoAccent);
+                        return { '--notif-accent-rgb': accent.rgb, '--notif-accent-hex': accent.hex };
+                      })()}
+                    >
+                      {!item.isRead && <span className="notification-unread-indicator" aria-label="Okunmadı" />}
                       <button type="button" className="notification-history-open" onClick={() => openNotification(item)} aria-label={`${item.app || 'Uygulama'} bildirimini aç`}>
                         <NotificationAvatar banner={item} brand={resolveNotifBrand(item).brand} presentation={resolveNotificationPresentation(item)} />
                         <span className="notification-history-copy"><strong><NotificationText text={item.title || item.app} /></strong><span><NotificationText text={item.body || item.app} /></span><small>{item.app} · <time className="clock-number-text">{new Date(item.timestamp).toLocaleString('tr-TR')}</time></small></span>
@@ -3038,9 +3896,7 @@ export default function App() {
                         <div className="codex-left-col">
                           <div
                             className="codex-giant-eyes"
-                            onClick={() =>
-                              playRoboSound('happy', islandSettings.soundEffects !== false)
-                            }
+                            onClick={() => playRoboSound('happy', islandSettings.soundEffects !== false)}
                             title="Robo"
                           >
                             <span className="giant-eye" />
@@ -3052,49 +3908,31 @@ export default function App() {
                             <span>JOBS TODAY</span>
                           </div>
                         </div>
-
                         <div className="codex-right-col">
                           <div className="codex-header-row">
-                            <h3 className="codex-title" title="Kod ajanlarının görev geçmişi">
-                              AI ACTIVITY
-                            </h3>
+                            <h3 className="codex-title" title="Kod ajanlarının görev geçmişi">AI ACTIVITY</h3>
                             {pendingApproval && (
                               <div className="approval-inline-btns">
-                                <button
-                                  type="button"
-                                  className="btn-allow-sm"
-                                  onClick={() => handleApprovalDecision(true)}
-                                >
-                                  Allow
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn-deny-sm"
-                                  onClick={() => handleApprovalDecision(false)}
-                                >
-                                  Deny
-                                </button>
+                                <button type="button" className="btn-allow-sm" onClick={() => handleApprovalDecision(true)}>Allow</button>
+                                <button type="button" className="btn-deny-sm" onClick={() => handleApprovalDecision(false)}>Deny</button>
                               </div>
                             )}
                           </div>
-
                           <div className="codex-recently-card">
-                            <span className="recently-heading">RECENTLY</span>
+                            <span className="recently-heading">AGENT ACTIVITY</span>
                             <div className="recently-list">
                               {activeRecentJobs.length === 0 ? (
                                 <div className="recently-row">
-                                  <span className="recently-prompt-text" style={{ opacity: 0.5 }}>
-                                    No tasks yet · Connect in Settings
-                                  </span>
+                                  <span className="recently-prompt-text" style={{ opacity: 0.5 }}>Agent activity will appear here</span>
                                 </div>
                               ) : (
                                 activeRecentJobs.slice(0, 3).map((job) => (
                                   <div key={job.id} className="recently-row">
-                                    <span className="recently-check-circle">
-                                      <Check size={11} strokeWidth={3.2} color="#000000" />
+                                    <span className={`recently-check-circle ${job.type === 'thinking' ? 'is-agent-thinking' : ''}`}>
+                                      {job.type === 'thinking' ? <i /> : <Check size={11} strokeWidth={3.2} color="#000000" />}
                                     </span>
                                     <span className="recently-prompt-text">{job.title}</span>
-                                    <span className="recently-time">{job.time}</span>
+                                    <span className="recently-time">{job.agent} · {job.type === 'thinking' ? 'Düşünüyor' : job.type === 'done' ? 'Yanıtladı' : job.type === 'error' ? 'Hata' : job.type === 'interrupted' ? 'Durduruldu' : job.time}</span>
                                   </div>
                                 ))
                               )}
@@ -3141,22 +3979,44 @@ export default function App() {
 
                           <div className="music-progress-row">
                             <span className="music-time-label">
-                              {formatMMSS(currentMedia.position)}
+                              {formatMMSS(isScrubbing && scrubPosition !== null ? scrubPosition : currentMedia.position)}
                             </span>
                             <div
-                              className="music-scrubber-track"
-                              role="progressbar"
+                              ref={scrubberTrackRef}
+                              className={`music-scrubber-track ${isScrubbing ? 'is-scrubbing' : ''}`}
+                              role="slider"
+                              tabIndex={0}
                               aria-label="Parça ilerlemesi"
                               aria-valuemin={0}
                               aria-valuemax={currentMedia.duration || 0}
-                              aria-valuenow={currentMedia.position || 0}
+                              aria-valuenow={Math.round(isScrubbing && scrubPosition !== null ? scrubPosition : (currentMedia.position || 0))}
+                              onClick={handleScrubberClick}
+                              onMouseDown={handleScrubberMouseDown}
                             >
                               <div
                                 className="music-scrubber-fill"
-                                style={{ width: `${progressPercent}%` }}
+                                style={{
+                                  width: `${
+                                    currentMedia.duration > 0
+                                      ? Math.min(100, Math.max(0, (((isScrubbing && scrubPosition !== null ? scrubPosition : currentMedia.position) || 0) / currentMedia.duration) * 100))
+                                      : 0
+                                  }%`,
+                                }}
+                              />
+                              <div
+                                className="music-scrubber-thumb"
+                                style={{
+                                  left: `${
+                                    currentMedia.duration > 0
+                                      ? Math.min(100, Math.max(0, (((isScrubbing && scrubPosition !== null ? scrubPosition : currentMedia.position) || 0) / currentMedia.duration) * 100))
+                                      : 0
+                                  }%`,
+                                }}
                               />
                             </div>
-                            <span className="music-time-label">-{formatMMSS(remainingSec)}</span>
+                            <span className="music-time-label">
+                              -{formatMMSS(Math.max(0, (currentMedia.duration || 0) - (isScrubbing && scrubPosition !== null ? scrubPosition : (currentMedia.position || 0))))}
+                            </span>
                           </div>
 
                           <div className="music-controls-row">
@@ -3820,6 +4680,22 @@ export default function App() {
         ) : (
           <Music size={14} />
         )}
+      </div>
+
+      {/* Modern Sleek Global Tooltip */}
+      <div
+        className={`modern-tooltip-portal is-${tooltipState.placement} ${
+          tooltipState.visible ? 'is-visible' : 'is-hidden'
+        }`}
+        style={{
+          left: Math.max(70, Math.min(window.innerWidth - 70, tooltipState.x)),
+          top: tooltipState.y,
+        }}
+        aria-hidden="true"
+      >
+        <div className="modern-tooltip-bubble">
+          {renderTooltipContent(tooltipState.text)}
+        </div>
       </div>
     </div>
   );

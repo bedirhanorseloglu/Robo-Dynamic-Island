@@ -1,0 +1,1452 @@
+{
+ "source": "seerge/g-helper app/Properties/Strings*.resx",
+ "exact": {
+  "منخفض": [
+   "backlight"
+  ],
+  "متوسط": [
+   "backlight"
+  ],
+  "أقصى": [
+   "backlight"
+  ],
+  "إيقاف": [
+   "backlight",
+   "touchpad"
+  ],
+  "ثابت": [
+   "backlight"
+  ],
+  "تنفس": [
+   "backlight"
+  ],
+  "دورة الألوان": [
+   "backlight"
+  ],
+  "قوس قزح": [
+   "backlight"
+  ],
+  "وميض": [
+   "backlight"
+  ],
+  "مذنب": [
+   "backlight"
+  ],
+  "visualizer mode": [
+   "backlight"
+  ],
+  "مكتوم": [
+   "micMute"
+  ],
+  "غير مكتوم": [
+   "mic"
+  ],
+  "تشغيل قفل fn": [
+   "fnlock"
+  ],
+  "إيقاف قفل fn": [
+   "fnlock"
+  ],
+  "win-lock toggle": [
+   "fnlock"
+  ],
+  "تشغيل": [
+   "touchpad"
+  ],
+  "هادئ": [
+   "mode"
+  ],
+  "متوازن": [
+   "mode"
+  ],
+  "توربو": [
+   "mode"
+  ],
+  "توفير الطاقة": [
+   "gpu"
+  ],
+  "قياسي": [
+   "gpu"
+  ],
+  "مستوى عالي": [
+   "gpu"
+  ],
+  "منطقة واحدة": [
+   "display"
+  ],
+  "عدة مناطق": [
+   "display"
+  ],
+  "عدة مناطق قوية": [
+   "display"
+  ],
+  "nízké": [
+   "backlight"
+  ],
+  "střední": [
+   "backlight"
+  ],
+  "maximální": [
+   "backlight"
+  ],
+  "vypnuto": [
+   "backlight",
+   "touchpad"
+  ],
+  "statický": [
+   "backlight"
+  ],
+  "pulzující": [
+   "backlight"
+  ],
+  "barevný cyklus": [
+   "backlight"
+  ],
+  "duha": [
+   "backlight"
+  ],
+  "stroboskop": [
+   "backlight"
+  ],
+  "kometa": [
+   "backlight"
+  ],
+  "vypnut": [
+   "micMute"
+  ],
+  "zapnut": [
+   "mic"
+  ],
+  "fn-lock zapnut": [
+   "fnlock"
+  ],
+  "fn-lock vypnut": [
+   "fnlock"
+  ],
+  "zapnuto": [
+   "touchpad"
+  ],
+  "tichý": [
+   "mode"
+  ],
+  "vyvážený": [
+   "mode"
+  ],
+  "turbo": [
+   "mode"
+  ],
+  "eco": [
+   "gpu"
+  ],
+  "standardní": [
+   "gpu"
+  ],
+  "ultimátní": [
+   "gpu"
+  ],
+  "jedna zóna": [
+   "display"
+  ],
+  "více zón": [
+   "display"
+  ],
+  "více zón, vysoký výkon": [
+   "display"
+  ],
+  "lav": [
+   "backlight"
+  ],
+  "mellem": [
+   "backlight"
+  ],
+  "maksimal": [
+   "backlight"
+  ],
+  "slukket": [
+   "backlight"
+  ],
+  "statisk": [
+   "backlight"
+  ],
+  "vejrtrækning": [
+   "backlight"
+  ],
+  "farvecyklus": [
+   "backlight"
+  ],
+  "regnbue": [
+   "backlight"
+  ],
+  "strobelys": [
+   "backlight"
+  ],
+  "komet": [
+   "backlight"
+  ],
+  "lydløs": [
+   "micMute",
+   "mode"
+  ],
+  "ikke lydløs": [
+   "mic"
+  ],
+  "fn-lås til": [
+   "fnlock"
+  ],
+  "fn-lås fra": [
+   "fnlock"
+  ],
+  "til": [
+   "touchpad"
+  ],
+  "fra": [
+   "touchpad"
+  ],
+  "balanceret": [
+   "mode"
+  ],
+  "øko": [
+   "gpu"
+  ],
+  "standard": [
+   "gpu"
+  ],
+  "ultimativ": [
+   "gpu"
+  ],
+  "en zone": [
+   "display"
+  ],
+  "multizone": [
+   "display"
+  ],
+  "multizone stærk": [
+   "display"
+  ],
+  "niedrig": [
+   "backlight"
+  ],
+  "mittel": [
+   "backlight"
+  ],
+  "max": [
+   "backlight"
+  ],
+  "aus": [
+   "backlight",
+   "touchpad"
+  ],
+  "statisch": [
+   "backlight"
+  ],
+  "atmen": [
+   "backlight"
+  ],
+  "farbwechsel": [
+   "backlight"
+  ],
+  "regenbogen": [
+   "backlight"
+  ],
+  "stumm": [
+   "micMute"
+  ],
+  "laut": [
+   "mic"
+  ],
+  "fn-sperre an": [
+   "fnlock"
+  ],
+  "fn-sperre aus": [
+   "fnlock"
+  ],
+  "an": [
+   "touchpad"
+  ],
+  "leise": [
+   "mode"
+  ],
+  "ausbalanciert": [
+   "mode"
+  ],
+  "one zone": [
+   "display"
+  ],
+  "multi zone": [
+   "display"
+  ],
+  "multi zone strong": [
+   "display"
+  ],
+  "bajo": [
+   "backlight"
+  ],
+  "medio": [
+   "backlight"
+  ],
+  "máximo": [
+   "backlight"
+  ],
+  "apagado": [
+   "backlight",
+   "touchpad"
+  ],
+  "estático": [
+   "backlight"
+  ],
+  "respiración": [
+   "backlight"
+  ],
+  "ciclo de color": [
+   "backlight"
+  ],
+  "arcoíris": [
+   "backlight"
+  ],
+  "estroboscópico": [
+   "backlight"
+  ],
+  "cometa": [
+   "backlight"
+  ],
+  "modo visual": [
+   "backlight"
+  ],
+  "silenciado": [
+   "micMute"
+  ],
+  "no silenciado": [
+   "mic"
+  ],
+  "tecla fn bloqueada": [
+   "fnlock"
+  ],
+  "tecla fn normal": [
+   "fnlock"
+  ],
+  "alternar bloq-win": [
+   "fnlock"
+  ],
+  "encendido": [
+   "touchpad"
+  ],
+  "silencio": [
+   "mode"
+  ],
+  "equilibrado": [
+   "mode"
+  ],
+  "estándar": [
+   "gpu"
+  ],
+  "ultimate": [
+   "gpu"
+  ],
+  "una zona": [
+   "display"
+  ],
+  "multizona": [
+   "display"
+  ],
+  "multizona fuerte": [
+   "display"
+  ],
+  "faible": [
+   "backlight"
+  ],
+  "moyen": [
+   "backlight"
+  ],
+  "maximum": [
+   "backlight"
+  ],
+  "désactivé": [
+   "backlight",
+   "touchpad"
+  ],
+  "statique": [
+   "backlight"
+  ],
+  "pulsation": [
+   "backlight"
+  ],
+  "cycle de couleur": [
+   "backlight"
+  ],
+  "arc-en-ciel": [
+   "backlight"
+  ],
+  "stroboscopique": [
+   "backlight"
+  ],
+  "comète": [
+   "backlight"
+  ],
+  "son désactivé": [
+   "micMute"
+  ],
+  "son activé": [
+   "mic"
+  ],
+  "verrouillage fn activé": [
+   "fnlock"
+  ],
+  "verrouillage fn désactivé": [
+   "fnlock"
+  ],
+  "activé": [
+   "touchpad"
+  ],
+  "silencieux": [
+   "mode"
+  ],
+  "équilibré": [
+   "mode"
+  ],
+  "éco": [
+   "gpu"
+  ],
+  "ultime": [
+   "gpu"
+  ],
+  "une zone": [
+   "display"
+  ],
+  "multi-zones": [
+   "display"
+  ],
+  "forte zone multiple": [
+   "display"
+  ],
+  "alacsony": [
+   "backlight"
+  ],
+  "közepes": [
+   "backlight"
+  ],
+  "ki": [
+   "backlight",
+   "touchpad"
+  ],
+  "állandó": [
+   "backlight"
+  ],
+  "lélegző": [
+   "backlight"
+  ],
+  "színváltás": [
+   "backlight"
+  ],
+  "szivárvány": [
+   "backlight"
+  ],
+  "stroboszkóp": [
+   "backlight"
+  ],
+  "üstökös": [
+   "backlight"
+  ],
+  "vizualizáló mód": [
+   "backlight"
+  ],
+  "mikrofon ki": [
+   "micMute"
+  ],
+  "mikrofon be": [
+   "mic"
+  ],
+  "fn-lock be": [
+   "fnlock"
+  ],
+  "fn-lock ki": [
+   "fnlock"
+  ],
+  "win-lock kapcsoló": [
+   "fnlock"
+  ],
+  "be": [
+   "touchpad"
+  ],
+  "csendes": [
+   "mode"
+  ],
+  "teljesítmény": [
+   "mode"
+  ],
+  "turbó": [
+   "mode"
+  ],
+  "takarékos mód": [
+   "gpu"
+  ],
+  "szabványos": [
+   "gpu"
+  ],
+  "legjobb": [
+   "gpu"
+  ],
+  "egy zóna": [
+   "display"
+  ],
+  "multi zóna": [
+   "display"
+  ],
+  "erős multi zóna": [
+   "display"
+  ],
+  "lemah": [
+   "backlight"
+  ],
+  "sedang": [
+   "backlight"
+  ],
+  "kuat": [
+   "backlight"
+  ],
+  "mati": [
+   "backlight",
+   "touchpad"
+  ],
+  "statis": [
+   "backlight"
+  ],
+  "bernapas": [
+   "backlight"
+  ],
+  "siklus warna": [
+   "backlight"
+  ],
+  "pelangi": [
+   "backlight"
+  ],
+  "berkedip": [
+   "backlight"
+  ],
+  "di bisukan": [
+   "micMute"
+  ],
+  "bunyikan": [
+   "mic"
+  ],
+  "fn-lock on": [
+   "fnlock"
+  ],
+  "fn-lock off": [
+   "fnlock"
+  ],
+  "hidup": [
+   "touchpad"
+  ],
+  "diam": [
+   "mode"
+  ],
+  "seimbang": [
+   "mode"
+  ],
+  "standar": [
+   "gpu"
+  ],
+  "basso": [
+   "backlight"
+  ],
+  "massimo": [
+   "backlight"
+  ],
+  "spento": [
+   "backlight",
+   "touchpad"
+  ],
+  "statico": [
+   "backlight"
+  ],
+  "respiro": [
+   "backlight"
+  ],
+  "ciclo colori": [
+   "backlight"
+  ],
+  "arcobaleno": [
+   "backlight"
+  ],
+  "strobo": [
+   "backlight"
+  ],
+  "muto": [
+   "micMute"
+  ],
+  "smutato": [
+   "mic"
+  ],
+  "blocco fn attivo": [
+   "fnlock"
+  ],
+  "blocco fn disattivo": [
+   "fnlock"
+  ],
+  "acceso": [
+   "touchpad"
+  ],
+  "silenzioso": [
+   "mode"
+  ],
+  "bilanciato": [
+   "mode"
+  ],
+  "estrema": [
+   "gpu"
+  ],
+  "multi zona": [
+   "display"
+  ],
+  "low": [
+   "backlight"
+  ],
+  "mid": [
+   "backlight"
+  ],
+  "オフ": [
+   "backlight",
+   "touchpad"
+  ],
+  "固定": [
+   "backlight"
+  ],
+  "呼吸": [
+   "backlight"
+  ],
+  "カラーサイクル": [
+   "backlight"
+  ],
+  "虹": [
+   "backlight"
+  ],
+  "ストロボ": [
+   "backlight"
+  ],
+  "コメット": [
+   "backlight"
+  ],
+  "ミュート": [
+   "micMute"
+  ],
+  "ミュート解除": [
+   "mic"
+  ],
+  "fnロック オン": [
+   "fnlock"
+  ],
+  "fnロック オフ": [
+   "fnlock"
+  ],
+  "オン": [
+   "touchpad"
+  ],
+  "サイレント": [
+   "mode"
+  ],
+  "バランス": [
+   "mode"
+  ],
+  "ターボ": [
+   "mode"
+  ],
+  "エコ": [
+   "gpu"
+  ],
+  "標準": [
+   "gpu"
+  ],
+  "1つのゾーン": [
+   "display"
+  ],
+  "낮음": [
+   "backlight"
+  ],
+  "중간": [
+   "backlight"
+  ],
+  "최대": [
+   "backlight"
+  ],
+  "꺼짐": [
+   "backlight",
+   "touchpad"
+  ],
+  "정적": [
+   "backlight"
+  ],
+  "숨쉬기": [
+   "backlight"
+  ],
+  "색 순환": [
+   "backlight"
+  ],
+  "무지개": [
+   "backlight"
+  ],
+  "섬광": [
+   "backlight"
+  ],
+  "혜성": [
+   "backlight"
+  ],
+  "음소거": [
+   "micMute"
+  ],
+  "음소거 해제": [
+   "mic"
+  ],
+  "fn-lock 켜짐": [
+   "fnlock"
+  ],
+  "fn-lock 꺼짐": [
+   "fnlock"
+  ],
+  "켜짐": [
+   "touchpad"
+  ],
+  "조용": [
+   "mode"
+  ],
+  "균형": [
+   "mode"
+  ],
+  "터보": [
+   "mode"
+  ],
+  "표준": [
+   "gpu"
+  ],
+  "단일 영역": [
+   "display"
+  ],
+  "다중 영역": [
+   "display"
+  ],
+  "다중 영역 강도": [
+   "display"
+  ],
+  "žem.": [
+   "backlight"
+  ],
+  "vid.": [
+   "backlight"
+  ],
+  "maks.": [
+   "backlight"
+  ],
+  "išjungta": [
+   "backlight",
+   "micMute",
+   "touchpad"
+  ],
+  "statinis": [
+   "backlight"
+  ],
+  "kvėpavimas": [
+   "backlight"
+  ],
+  "spalvų ciklas": [
+   "backlight"
+  ],
+  "vaivorykštė": [
+   "backlight"
+  ],
+  "blyksniai": [
+   "backlight"
+  ],
+  "vizualizatoriaus režimas": [
+   "backlight"
+  ],
+  "įjungta": [
+   "mic",
+   "touchpad"
+  ],
+  "fn užraktas įjungtas": [
+   "fnlock"
+  ],
+  "fn užraktas išjungtas": [
+   "fnlock"
+  ],
+  "„win-lock“ užraktas": [
+   "fnlock"
+  ],
+  "tylus": [
+   "mode"
+  ],
+  "balansuotas": [
+   "mode"
+  ],
+  "ekonomiškas": [
+   "gpu"
+  ],
+  "įprastas": [
+   "gpu"
+  ],
+  "maksimalus": [
+   "gpu"
+  ],
+  "viena zona": [
+   "display"
+  ],
+  "kelios zonos": [
+   "display"
+  ],
+  "kelių zonų stiprumas": [
+   "display"
+  ],
+  "niskie": [
+   "backlight"
+  ],
+  "średnie": [
+   "backlight"
+  ],
+  "wysokie": [
+   "backlight"
+  ],
+  "wyłączone": [
+   "backlight"
+  ],
+  "statyczny": [
+   "backlight"
+  ],
+  "oddychanie": [
+   "backlight"
+  ],
+  "pętla kolorów": [
+   "backlight"
+  ],
+  "tęcza": [
+   "backlight"
+  ],
+  "tryb wizualizera": [
+   "backlight"
+  ],
+  "wyciszony": [
+   "micMute"
+  ],
+  "włączony": [
+   "mic",
+   "touchpad"
+  ],
+  "fn-lock wł.": [
+   "fnlock"
+  ],
+  "fn-lock wył.": [
+   "fnlock"
+  ],
+  "blokada klawisza windows": [
+   "fnlock"
+  ],
+  "wyłączony": [
+   "touchpad"
+  ],
+  "cichy": [
+   "mode"
+  ],
+  "balans": [
+   "mode"
+  ],
+  "jedna strefa": [
+   "display"
+  ],
+  "wiele stref": [
+   "display"
+  ],
+  "wiele stref (mocniejsze)": [
+   "display"
+  ],
+  "baixo": [
+   "backlight"
+  ],
+  "meio": [
+   "backlight"
+  ],
+  "desligado": [
+   "backlight",
+   "touchpad"
+  ],
+  "repiração": [
+   "backlight"
+  ],
+  "ciclo de cores": [
+   "backlight"
+  ],
+  "arco-íris": [
+   "backlight"
+  ],
+  "estroboscópio": [
+   "backlight"
+  ],
+  "comet": [
+   "backlight"
+  ],
+  "não silenciado": [
+   "mic"
+  ],
+  "tecla fn desbloqueada": [
+   "fnlock"
+  ],
+  "ligado": [
+   "touchpad"
+  ],
+  "silencioso": [
+   "mode"
+  ],
+  "econômico": [
+   "gpu"
+  ],
+  "padrão": [
+   "gpu"
+  ],
+  "uma zona": [
+   "display"
+  ],
+  "multi zona forte": [
+   "display"
+  ],
+  "médio": [
+   "backlight"
+  ],
+  "respiração": [
+   "backlight"
+  ],
+  "económico": [
+   "gpu"
+  ],
+  "múltipla zona": [
+   "display"
+  ],
+  "múltipla zona forte": [
+   "display"
+  ],
+  "off": [
+   "backlight",
+   "touchpad"
+  ],
+  "static": [
+   "backlight"
+  ],
+  "breathe": [
+   "backlight"
+  ],
+  "color cycle": [
+   "backlight"
+  ],
+  "rainbow": [
+   "backlight"
+  ],
+  "strobe": [
+   "backlight"
+  ],
+  "muted": [
+   "micMute"
+  ],
+  "unmuted": [
+   "mic"
+  ],
+  "on": [
+   "touchpad"
+  ],
+  "silent": [
+   "mode"
+  ],
+  "balanced": [
+   "mode"
+  ],
+  "respirație": [
+   "backlight"
+  ],
+  "ciclu de culori": [
+   "backlight"
+  ],
+  "curcubeu": [
+   "backlight"
+  ],
+  "stroboscop": [
+   "backlight"
+  ],
+  "cometă": [
+   "backlight"
+  ],
+  "pornit": [
+   "touchpad"
+  ],
+  "oprit": [
+   "touchpad"
+  ],
+  "silențios": [
+   "mode"
+  ],
+  "echilibrat": [
+   "mode"
+  ],
+  "düşük": [
+   "backlight"
+  ],
+  "orta": [
+   "backlight"
+  ],
+  "yüksek": [
+   "backlight"
+  ],
+  "kapalı": [
+   "backlight",
+   "touchpad"
+  ],
+  "sabit": [
+   "backlight"
+  ],
+  "nefes": [
+   "backlight"
+  ],
+  "renk döngüsü": [
+   "backlight"
+  ],
+  "gökkuşağı": [
+   "backlight"
+  ],
+  "flaş": [
+   "backlight"
+  ],
+  "kuyruklu yıldız": [
+   "backlight"
+  ],
+  "susturuldu": [
+   "micMute"
+  ],
+  "ses açık": [
+   "mic"
+  ],
+  "fn-lock açık": [
+   "fnlock"
+  ],
+  "fn-lock kapalı": [
+   "fnlock"
+  ],
+  "windows tuşu kilidi": [
+   "fnlock"
+  ],
+  "açık": [
+   "touchpad"
+  ],
+  "sessiz": [
+   "mode"
+  ],
+  "dengeli": [
+   "mode"
+  ],
+  "eko": [
+   "gpu"
+  ],
+  "standart": [
+   "gpu"
+  ],
+  "tek bölge": [
+   "display"
+  ],
+  "çoklu bölge": [
+   "display"
+  ],
+  "çoklu bölge güçlü": [
+   "display"
+  ],
+  "низька": [
+   "backlight"
+  ],
+  "середня": [
+   "backlight"
+  ],
+  "максимальна": [
+   "backlight"
+  ],
+  "вимкнена": [
+   "backlight"
+  ],
+  "статична": [
+   "backlight"
+  ],
+  "дихання": [
+   "backlight"
+  ],
+  "зміна кольорів": [
+   "backlight"
+  ],
+  "веселка": [
+   "backlight"
+  ],
+  "стробоскоп": [
+   "backlight"
+  ],
+  "комета": [
+   "backlight"
+  ],
+  "беззвучний": [
+   "micMute"
+  ],
+  "активний": [
+   "mic"
+  ],
+  "fn-lock увімк.": [
+   "fnlock"
+  ],
+  "fn-lock вимк.": [
+   "fnlock"
+  ],
+  "перемикач утримання win": [
+   "fnlock"
+  ],
+  "увімк.": [
+   "touchpad"
+  ],
+  "вимк.": [
+   "touchpad"
+  ],
+  "тихий": [
+   "mode"
+  ],
+  "баланс": [
+   "mode"
+  ],
+  "турбо": [
+   "mode"
+  ],
+  "еко": [
+   "gpu"
+  ],
+  "стандартний": [
+   "gpu"
+  ],
+  "ультімейт": [
+   "gpu"
+  ],
+  "одна зона": [
+   "display"
+  ],
+  "мульти зона": [
+   "display"
+  ],
+  "мульти зона сильна": [
+   "display"
+  ],
+  "thấp": [
+   "backlight"
+  ],
+  "trung bình": [
+   "backlight"
+  ],
+  "cao": [
+   "backlight"
+  ],
+  "tắt": [
+   "backlight",
+   "touchpad"
+  ],
+  "tĩnh": [
+   "backlight"
+  ],
+  "hơi thở": [
+   "backlight"
+  ],
+  "chuyển màu": [
+   "backlight"
+  ],
+  "cầu vồng": [
+   "backlight"
+  ],
+  "nhấp nháy": [
+   "backlight"
+  ],
+  "sao chổi": [
+   "backlight"
+  ],
+  "bật khóa fn": [
+   "fnlock"
+  ],
+  "tắt khóa fn": [
+   "fnlock"
+  ],
+  "bật": [
+   "touchpad"
+  ],
+  "im lặng": [
+   "mode"
+  ],
+  "cân bằng": [
+   "mode"
+  ],
+  "tiết kiệm": [
+   "gpu"
+  ],
+  "tiêu chuẩn": [
+   "gpu"
+  ],
+  "tối thượng": [
+   "gpu"
+  ],
+  "低亮度": [
+   "backlight"
+  ],
+  "中亮度": [
+   "backlight"
+  ],
+  "高亮度": [
+   "backlight"
+  ],
+  "背光关闭": [
+   "backlight"
+  ],
+  "恒亮(静态)": [
+   "backlight"
+  ],
+  "彩色循环": [
+   "backlight"
+  ],
+  "彩虹": [
+   "backlight"
+  ],
+  "闪烁": [
+   "backlight"
+  ],
+  "彗星": [
+   "backlight"
+  ],
+  "可视化模式": [
+   "backlight"
+  ],
+  "麦克风关闭": [
+   "micMute"
+  ],
+  "麦克风开启": [
+   "mic"
+  ],
+  "fn锁定开": [
+   "fnlock"
+  ],
+  "fn锁定关": [
+   "fnlock"
+  ],
+  "win 键锁定切换": [
+   "fnlock"
+  ],
+  "开": [
+   "touchpad"
+  ],
+  "关": [
+   "touchpad"
+  ],
+  "静音模式": [
+   "mode"
+  ],
+  "平衡模式": [
+   "mode"
+  ],
+  "增强模式": [
+   "mode"
+  ],
+  "集显模式": [
+   "gpu"
+  ],
+  "标准模式": [
+   "gpu"
+  ],
+  "独显直连": [
+   "gpu"
+  ],
+  "单区": [
+   "display"
+  ],
+  "多区": [
+   "display"
+  ],
+  "多区强化": [
+   "display"
+  ],
+  "低": [
+   "backlight"
+  ],
+  "中等": [
+   "backlight"
+  ],
+  "最大": [
+   "backlight"
+  ],
+  "關閉": [
+   "backlight",
+   "touchpad"
+  ],
+  "靜態恆亮": [
+   "backlight"
+  ],
+  "色彩循環": [
+   "backlight"
+  ],
+  "閃爍": [
+   "backlight"
+  ],
+  "已靜音": [
+   "micMute"
+  ],
+  "已取消靜音": [
+   "mic"
+  ],
+  "fn鎖定": [
+   "fnlock"
+  ],
+  "fn鎖定解除": [
+   "fnlock"
+  ],
+  "win鍵鎖定": [
+   "fnlock"
+  ],
+  "開啟": [
+   "touchpad"
+  ],
+  "靜音": [
+   "mode"
+  ],
+  "效能": [
+   "mode"
+  ],
+  "極速": [
+   "mode"
+  ],
+  "節能模式": [
+   "gpu"
+  ],
+  "標準模式": [
+   "gpu"
+  ],
+  "獨顯輸出": [
+   "gpu"
+  ],
+  "單區": [
+   "display"
+  ],
+  "多區": [
+   "display"
+  ],
+  "多區強化": [
+   "display"
+  ],
+  "star": [
+   "backlight"
+  ],
+  "rain": [
+   "backlight"
+  ],
+  "highlight": [
+   "backlight"
+  ],
+  "laser": [
+   "backlight"
+  ],
+  "ripple": [
+   "backlight"
+  ],
+  "flash": [
+   "backlight"
+  ],
+  "battery": [
+   "backlight"
+  ],
+  "heatmap": [
+   "backlight"
+  ],
+  "gpu mode": [
+   "backlight"
+  ],
+  "ambient": [
+   "backlight"
+  ],
+  "audio spectrum": [
+   "backlight"
+  ],
+  "audio pulse": [
+   "backlight"
+  ],
+  "gradient": [
+   "backlight"
+  ],
+  "zone test": [
+   "backlight"
+  ],
+  "custom": [
+   "backlight"
+  ]
+ },
+ "prefixes": {
+  "شاشة اللمس": [
+   "touchpad"
+  ],
+  "overlay": [
+   "overlay"
+  ],
+  "dotykový displej": [
+   "touchpad"
+  ],
+  "touchscreen": [
+   "touchpad"
+  ],
+  "pantalla táctil": [
+   "touchpad"
+  ],
+  "interfaz": [
+   "overlay"
+  ],
+  "écran tactile": [
+   "touchpad"
+  ],
+  "érintőképernyő": [
+   "touchpad"
+  ],
+  "átfedés": [
+   "overlay"
+  ],
+  "タッチスクリーン": [
+   "touchpad"
+  ],
+  "터치스크린": [
+   "touchpad"
+  ],
+  "jutiklinis ekranas": [
+   "touchpad"
+  ],
+  "perdanga": [
+   "overlay"
+  ],
+  "ekran dotykowy": [
+   "touchpad"
+  ],
+  "nakładka": [
+   "overlay"
+  ],
+  "tela de toque": [
+   "touchpad"
+  ],
+  "ecrã tátil": [
+   "touchpad"
+  ],
+  "dokunmatik ekran": [
+   "touchpad"
+  ],
+  "yer paylaşımı": [
+   "overlay"
+  ],
+  "сенсорний екран": [
+   "touchpad"
+  ],
+  "触摸屏": [
+   "touchpad"
+  ],
+  "屏幕叠加": [
+   "overlay"
+  ],
+  "觸控螢幕": [
+   "touchpad"
+  ],
+  "效能監控": [
+   "overlay"
+  ]
+ }
+}

@@ -1,9 +1,32 @@
 param(
     [string]$Action = "status",
-    [string]$LastTitle = ""
+    [string]$LastTitle = "",
+    [double]$Position = -1
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+try {
+    Add-Type -TypeDefinition @'
+    using System;
+    using System.Runtime.InteropServices;
+    public static class WinMediaKey {
+        [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);
+        public static void SendNext() {
+            keybd_event(0xB0, 0, 0, 0);
+            keybd_event(0xB0, 0, 2, 0);
+        }
+        public static void SendPrev() {
+            keybd_event(0xB1, 0, 0, 0);
+            keybd_event(0xB1, 0, 2, 0);
+        }
+        public static void SendPlayPause() {
+            keybd_event(0xB3, 0, 0, 0);
+            keybd_event(0xB3, 0, 2, 0);
+        }
+    }
+'@
+} catch {}
 
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 
@@ -56,11 +79,21 @@ try {
         $null = Await-WinRT ($session.TryTogglePlayPauseAsync()) ([bool])
         Start-Sleep -Milliseconds 120
     } elseif ($Action -eq "next") {
-        $null = Await-WinRT ($session.TrySkipNextAsync()) ([bool])
-        Start-Sleep -Milliseconds 200
+        $res = Await-WinRT ($session.TrySkipNextAsync()) ([bool])
+        if (-not $res) {
+            try { [WinMediaKey]::SendNext() } catch {}
+        }
+        Start-Sleep -Milliseconds 180
     } elseif ($Action -eq "prev") {
-        $null = Await-WinRT ($session.TrySkipPreviousAsync()) ([bool])
-        Start-Sleep -Milliseconds 200
+        $res = Await-WinRT ($session.TrySkipPreviousAsync()) ([bool])
+        if (-not $res) {
+            try { [WinMediaKey]::SendPrev() } catch {}
+        }
+        Start-Sleep -Milliseconds 180
+    } elseif ($Action -eq "seek" -and $Position -ge 0) {
+        $ticks = [long]($Position * 10000000)
+        $null = Await-WinRT ($session.TryChangePlaybackPositionAsync($ticks)) ([bool])
+        Start-Sleep -Milliseconds 80
     }
 
     $props = Await-WinRT ($session.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])

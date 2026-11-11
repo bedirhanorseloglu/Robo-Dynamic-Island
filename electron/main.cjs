@@ -21,8 +21,25 @@ const http = require('http');
 const https = require('https');
 const os = require('os');
 const fs = require('fs');
+const {
+  GHelperBridgeClient,
+  checkScheduledTaskStatus: checkGHelperTaskStatus,
+  installScheduledTask: installGHelperTask,
+  startScheduledTask: startGHelperTask,
+  resolveGHelperToast,
+  readGHelperStatus,
+} = require('./ghelper-service.cjs');
 
 app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=96');
+app.commandLine.appendSwitch('disable-breakpad');
+app.commandLine.appendSwitch('disable-component-update');
+app.commandLine.appendSwitch('disable-dev-shm-usage');
+app.commandLine.appendSwitch('disable-background-networking');
+app.commandLine.appendSwitch('disable-default-apps');
+app.commandLine.appendSwitch('disable-sync');
+app.commandLine.appendSwitch('enable-features', 'TrimOnMemoryPressure');
+app.commandLine.appendSwitch('disable-features', 'SpareRendererForSitePerProcess,CalculateNativeWinOcclusion,InterestFeedContentSuggestions');
 
 const CANVAS_WIDTH = 700;
 const CANVAS_HEIGHT = 320;
@@ -30,7 +47,7 @@ const CANVAS_HEIGHT = 320;
 const MODE_DIMENSIONS = {
   idle: { bodyWidth: 130, height: 20, earRadius: 8, bottomRadius: 10, droplet: 0 },
   'mini-progress': { bodyWidth: 268, height: 12, earRadius: 7, bottomRadius: 6, droplet: 0 },
-  hud: { bodyWidth: 288, height: 32, earRadius: 10, bottomRadius: 16, droplet: 0 },
+  hud: { bodyWidth: 312, height: 36, earRadius: 0, bottomRadius: 18, droplet: 0 },
   battery: { bodyWidth: 356, height: 58, earRadius: 14, bottomRadius: 24, droplet: 0 },
   'notif-toast': { bodyWidth: 384, height: 60, earRadius: 14, bottomRadius: 24, droplet: 0 },
   'music-bar': { bodyWidth: 350, height: 26, earRadius: 9, bottomRadius: 13, droplet: 0 },
@@ -43,6 +60,8 @@ let mainWindow = null;
 let settingsWindow = null;
 let tray = null;
 let trayContextMenu = null;
+let notificationTargetFocusTimer = null;
+let ghelperBridgeClient = null;
 let lastMediaTitle = '';
 let lastMediaArtist = '';
 let cachedThumbnail = '';
@@ -192,6 +211,108 @@ let userSettings = {
 
 function getSettingsFilePath() {
   return path.join(app.getPath('userData'), 'twocode-settings.json');
+}
+
+function getAgentIntegrationPaths() {
+  const home = os.homedir();
+  return {
+    codex: path.join(home, '.codex', 'hooks.json'),
+    antigravity: path.join(home, '.gemini', 'config', 'hooks.json'),
+    hookScript: path.join(app.getPath('userData'), 'integrations', 'twocode-agent-hook.ps1'),
+  };
+}
+
+function readJsonFile(filePath) {
+  try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return {}; }
+}
+
+function readExistingJsonFile(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+  const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+    throw new Error(`Invalid settings file: ${filePath}`);
+  }
+  return parsed;
+}
+
+function getAgentIntegrationStatus() {
+  const paths = getAgentIntegrationPaths();
+  const codex = readJsonFile(paths.codex);
+  const antigravity = readJsonFile(paths.antigravity);
+  const antigravityIdePath = userSettings.antigravityIdePath || '';
+  const detectedIde = [
+    antigravityIdePath,
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Antigravity', 'Antigravity.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Google', 'Antigravity', 'Antigravity.exe'),
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Antigravity', 'Antigravity.exe'),
+  ].find((candidate) => candidate && fs.existsSync(candidate)) || '';
+  const hasCodexHook = (eventName) => Boolean(codex.hooks?.[eventName]?.some((entry) => entry.hooks?.some((hook) => hook.command?.includes('twocode-agent-hook.ps1'))));
+  const antigravityMonitor = antigravity['twocode-agent-monitor'];
+  return {
+    codexConnected: hasCodexHook('UserPromptSubmit') && hasCodexHook('Stop'),
+    antigravityConnected: Boolean(antigravityMonitor?.PreInvocation?.length && antigravityMonitor?.Stop?.length),
+    antigravityIdePath: detectedIde,
+    codexConfigPath: paths.codex,
+    antigravityConfigPath: paths.antigravity,
+  };
+}
+
+function createAgentHookCommand(agent) {
+  const scriptPath = getAgentIntegrationPaths().hookScript;
+  return `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}" ${agent}`;
+}
+
+async function connectAgentIntegrations() {
+  const paths = getAgentIntegrationPaths();
+  const codexConfig = readExistingJsonFile(paths.codex);
+  const antigravityConfig = readExistingJsonFile(paths.antigravity);
+  if (codexConfig.hooks && (typeof codexConfig.hooks !== 'object' || Array.isArray(codexConfig.hooks))) {
+    throw new Error('Codex hooks settings have an unsupported format.');
+  }
+  const hookScript = [
+    'param([Parameter(Mandatory=$true)][ValidateSet("codex","antigravity")][string]$Agent)',
+    '$ErrorActionPreference = "SilentlyContinue"',
+    '$raw = [Console]::In.ReadToEnd()',
+    'try { $event = $raw | ConvertFrom-Json } catch { exit 0 }',
+    '$eventName = [string]$event.hook_event_name',
+    'if (-not $eventName) { $eventName = [string]$event.event }',
+    'if ($Agent -eq "codex" -and $eventName -eq "UserPromptSubmit") { $type = "thinking" }',
+    'elseif ($Agent -eq "antigravity" -and $eventName -eq "PreInvocation") { if ($event.invocationNum -ne 0) { exit 0 }; $type = "thinking" }',
+    'elseif ($eventName -eq "Stop") { if ($Agent -eq "antigravity" -and $event.fullyIdle -eq $false) { exit 0 }; $type = if ($event.error) { "error" } else { "done" } }',
+    'elseif ($eventName -eq "Interrupt") { $type = "interrupted" }',
+    'else { exit 0 }',
+    '$agentName = if ($Agent -eq "codex") { "Codex" } else { "Antigravity IDE" }',
+    '$title = if ($type -eq "thinking") { "Düşünüyor" } elseif ($type -eq "done") { "Yanıtladı" } elseif ($type -eq "error") { "Tamamlanamadı" } else { "Durduruldu" }',
+    '$detail = if ($type -eq "thinking") { if ($event.prompt) { $event.prompt } else { $event.lastUserInput } } elseif ($type -eq "done") { if ($event.last_assistant_message) { $event.last_assistant_message } elseif ($event.prompt_response) { $event.prompt_response } else { "Yanıt hazır" } } else { [string]$event.error }',
+    'if ($detail -and $detail.Length -gt 500) { $detail = $detail.Substring(0, 497) + "..." }',
+    '$payload = @{ agent = $agentName; type = $type; title = $title; detail = [string]$detail; event = $eventName; sessionId = if ($event.session_id) { $event.session_id } else { $event.conversationId } } | ConvertTo-Json -Compress',
+    'try { Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:4242/api/agent" -ContentType "application/json" -Body $payload -TimeoutSec 2 | Out-Null } catch {}',
+    'if ($Agent -eq "antigravity") { if ($eventName -eq "Stop") { @{ decision = "allow" } | ConvertTo-Json -Compress } else { "{}" } }',
+    'exit 0',
+  ].join('\r\n');
+  fs.mkdirSync(path.dirname(paths.hookScript), { recursive: true });
+  fs.writeFileSync(paths.hookScript, hookScript, 'utf8');
+
+  fs.mkdirSync(path.dirname(paths.codex), { recursive: true });
+  codexConfig.hooks ||= {};
+  for (const eventName of ['UserPromptSubmit', 'Stop', 'Interrupt']) {
+    const entries = (codexConfig.hooks[eventName] || []).filter((entry) => !entry.hooks?.some((hook) => hook.command?.includes('twocode-agent-hook.ps1')));
+    entries.push({
+      hooks: [{ type: 'command', command: createAgentHookCommand('codex'), commandWindows: createAgentHookCommand('codex'), async: true, timeout: 3 }],
+    });
+    codexConfig.hooks[eventName] = entries;
+  }
+  fs.writeFileSync(paths.codex, JSON.stringify(codexConfig, null, 2), 'utf8');
+
+  fs.mkdirSync(path.dirname(paths.antigravity), { recursive: true });
+  const antigravityMonitor = antigravityConfig['twocode-agent-monitor'] || {};
+  antigravityMonitor.enabled = true;
+  for (const eventName of ['PreInvocation', 'Stop']) {
+    antigravityMonitor[eventName] = [{ hooks: [{ type: 'command', command: createAgentHookCommand('antigravity'), timeout: 3 }] }];
+  }
+  antigravityConfig['twocode-agent-monitor'] = antigravityMonitor;
+  fs.writeFileSync(paths.antigravity, JSON.stringify(antigravityConfig, null, 2), 'utf8');
+  return getAgentIntegrationStatus();
 }
 
 const API_KEY_SETTING_NAMES = [
@@ -514,17 +635,22 @@ function loadLocalAiHistory() {
     }
   } catch {}
 
-  // 4. Read Antigravity brain transcripts (~/.gemini/antigravity/brain/*/transcript.jsonl)
+  // 4. Read Antigravity App and standalone IDE transcripts.
   try {
-    const brainDir = path.join(os.homedir(), '.gemini', 'antigravity', 'brain');
-    if (fs.existsSync(brainDir)) {
-      const dirs = fs.readdirSync(brainDir, { withFileTypes: true })
-        .filter(d => d.isDirectory())
-        .slice(-3);
-
-      const seenAg = new Set();
-      for (const d of dirs.reverse()) {
-        const tPath = path.join(brainDir, d.name, '.system_generated', 'logs', 'transcript.jsonl');
+    const brainDirs = [
+      { path: path.join(os.homedir(), '.gemini', 'antigravity', 'brain'), agent: 'Antigravity' },
+      { path: path.join(os.homedir(), '.gemini', 'antigravity-ide', 'brain'), agent: 'Antigravity IDE' },
+    ];
+    const seenAg = new Set();
+    for (const brain of brainDirs) {
+      if (!fs.existsSync(brain.path)) continue;
+      const dirs = fs.readdirSync(brain.path, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => ({ ...entry, mtime: fs.statSync(path.join(brain.path, entry.name)).mtimeMs }))
+        .sort((a, b) => b.mtime - a.mtime)
+        .slice(0, 8);
+      for (const d of dirs) {
+        const tPath = path.join(brain.path, d.name, '.system_generated', 'logs', 'transcript.jsonl');
         if (fs.existsSync(tPath)) {
           try {
             const lines = readLastBytesSync(tPath, 32768).split(/\r?\n/).filter(Boolean);
@@ -541,7 +667,7 @@ function loadLocalAiHistory() {
                   if (dt.toDateString() === todayStr) todayCount++;
                   antigravityJobs.push({
                     id: `ag_${d.name}_${antigravityJobs.length}`,
-                    agent: 'Antigravity',
+                    agent: brain.agent,
                     title: reqText,
                     time: formatHHMMFromDate(dt),
                     status: 'done',
@@ -782,8 +908,9 @@ async function fetchLyricsFromLrclib(title, artist) {
 }
 
 let isPollingMedia = false;
-function pollWindowsMedia(action = 'status') {
+function pollWindowsMedia(action = 'status', value = null) {
   return new Promise((resolve) => {
+    if (gameModeActive && action === 'status') return resolve(lastMediaState);
     if (isPollingMedia && action === 'status') {
       return resolve(lastMediaState);
     }
@@ -802,6 +929,9 @@ function pollWindowsMedia(action = 'status') {
       '-LastTitle',
       cachedThumbnail ? lastMediaTitle || '' : '',
     ];
+    if (action === 'seek' && typeof value === 'number') {
+      args.push('-Position', String(Math.max(0, value)));
+    }
 
     execFile('powershell.exe', args, { timeout: 4000, windowsHide: true }, async (err, stdout) => {
       isPollingMedia = false;
@@ -885,12 +1015,20 @@ function pollWindowsMedia(action = 'status') {
 function handleIncomingHookPayload(payload, res) {
   const id = payload.id || 'req_' + Date.now();
   const hookEventName = payload.hook_event_name || payload.event || '';
+  const looksLikeClaudeHook = Boolean(
+    payload.transcript_path ||
+    payload.permission_mode ||
+    typeof payload.stop_hook_active === 'boolean' ||
+    hookEventName === 'PermissionRequest'
+  );
 
   let mappedType = payload.type || 'working';
   if (hookEventName === 'PermissionRequest') mappedType = 'approval';
+  else if (hookEventName === 'UserPromptSubmit' || hookEventName === 'PreInvocation') mappedType = 'thinking';
+  else if (hookEventName === 'Interrupt') mappedType = 'interrupted';
   else if (hookEventName === 'Stop' || hookEventName === 'SessionEnd' || payload.type === 'done') {
-    mappedType = 'done';
-    localAgentHistory.jobsToday++;
+    mappedType = payload.type || 'done';
+    if (mappedType === 'done') localAgentHistory.jobsToday++;
   }
 
   const promptTitle =
@@ -903,10 +1041,11 @@ function handleIncomingHookPayload(payload, res) {
 
   const eventObj = {
     id,
-    agent: payload.agent || (hookEventName ? 'Claude' : 'Codex'),
+    agent: payload.agent || (/preinvocation/i.test(hookEventName) ? 'Antigravity IDE' : looksLikeClaudeHook ? 'Claude' : 'Codex'),
     type: mappedType,
     title: String(promptTitle).slice(0, 140),
-    detail: payload.detail || '',
+    detail: String(payload.detail || payload.last_assistant_message || payload.prompt_response || '').slice(0, 500),
+    sessionId: payload.sessionId || payload.session_id || payload.conversationId || '',
     command:
       payload.command ||
       (payload.tool_input && payload.tool_input.command) ||
@@ -947,6 +1086,7 @@ function handleIncomingHookPayload(payload, res) {
   }
 }
 
+let localAgentServers = [];
 function createAgentHttpListener(port) {
   const server = http.createServer((req, res) => {
     if (req.method === 'OPTIONS') {
@@ -1009,13 +1149,23 @@ function createAgentHttpListener(port) {
     res.end(JSON.stringify({ ok: true }));
   });
 
-  server.on('error', () => {});
-  server.listen(port, '0.0.0.0');
+  server.on('error', () => {
+    localAgentServers = localAgentServers.filter((listener) => listener !== server);
+  });
+  server.listen(port, '127.0.0.1');
+  return server;
 }
 
 function startLocalAgentServers() {
-  createAgentHttpListener(4242);
-  createAgentHttpListener(47823);
+  if (localAgentServers.length) return;
+  localAgentServers = [createAgentHttpListener(4242)];
+}
+
+function stopLocalAgentServers() {
+  for (const server of localAgentServers) {
+    try { server.close(); } catch {}
+  }
+  localAgentServers = [];
 }
 
 function openOrFocusSettingsWindow(tabId = 'home') {
@@ -1301,6 +1451,12 @@ function animateWindowShapeToMode(modeOrExpanded, customBodyWidth) {
 function startCursorHoverWatcher() {
   setInterval(() => {
     if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
+    if (gameModeActive) {
+      isHoveringNotch = false;
+      if (leaveTimer) clearTimeout(leaveTimer);
+      leaveTimer = null;
+      return;
+    }
     if (userSettings.islandOpenMode === 'On click' && currentModeKey !== 'expanded') return;
     try {
       const pt = screen.getCursorScreenPoint();
@@ -1339,7 +1495,7 @@ function startCursorHoverWatcher() {
         }, 180);
       }
     } catch {}
-  }, 60);
+  }, 100);
 }
 
 function createWindow() {
@@ -1372,6 +1528,11 @@ function createWindow() {
     },
   });
 
+  // Keep the overlay visible to the user while excluding its contents from screen captures.
+  if (process.platform === 'win32' && typeof mainWindow.setContentProtection === 'function') {
+    mainWindow.setContentProtection(true);
+  }
+
   applyShapeImmediate(currentShape);
 
   mainWindow.setAlwaysOnTop(true, 'screen-saver');
@@ -1382,6 +1543,7 @@ function createWindow() {
     mainWindow.moveTop();
     mainWindow.webContents.send('ai-history-update', localAgentHistory);
     mainWindow.webContents.send('settings-updated', userSettings);
+    mainWindow.webContents.send('game-mode-change', gameModeActive);
     console.log(
       '✓ TwoCode Dynamic Island yüklendi ve ekranda gösteriliyor! Bounds:',
       JSON.stringify(mainWindow.getBounds())
@@ -1405,12 +1567,14 @@ function createWindow() {
 function registerGlobalShortcuts() {
   try {
     globalShortcut.register('CommandOrControl+Alt+T', () => {
+      if (gameModeActive) return;
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.show();
         mainWindow.webContents.send('notch-hover-change', true);
       }
     });
     globalShortcut.register('CommandOrControl+Alt+H', () => {
+      if (gameModeActive) return;
       if (!mainWindow || mainWindow.isDestroyed()) return;
       if (mainWindow.isVisible()) mainWindow.hide();
       else mainWindow.showInactive();
@@ -1419,13 +1583,103 @@ function registerGlobalShortcuts() {
 }
 
 let systemWatcherProc = null;
+let gameModeActive = false;
+let gameModeSettingsWasVisible = false;
+let agentHistoryPollTimer = null;
+let mediaPollTimeout = null;
+let clipboardPollTimer = null;
+
+function scheduleNextMediaPoll(customDelay) {
+  if (gameModeActive) return;
+  if (mediaPollTimeout) clearTimeout(mediaPollTimeout);
+
+  let delay = customDelay;
+  if (!delay) {
+    if (lastMediaState && lastMediaState.hasSession && lastMediaState.isPlaying) {
+      delay = 2500; // Actively playing: fast track position updates
+    } else if (lastMediaState && lastMediaState.hasSession) {
+      delay = 6000; // Paused track: moderate check
+    } else {
+      delay = 12000; // No media session: idle backoff (prevents spawning powershell constantly)
+    }
+  }
+
+  mediaPollTimeout = setTimeout(async () => {
+    try {
+      await pollWindowsMedia('status');
+    } catch {}
+    scheduleNextMediaPoll();
+  }, delay);
+}
+
+function stopBackgroundPolling() {
+  if (agentHistoryPollTimer) clearInterval(agentHistoryPollTimer);
+  if (mediaPollTimeout) clearTimeout(mediaPollTimeout);
+  if (clipboardPollTimer) clearInterval(clipboardPollTimer);
+  agentHistoryPollTimer = null;
+  mediaPollTimeout = null;
+  clipboardPollTimer = null;
+}
+
+function startBackgroundPolling() {
+  if (gameModeActive) return;
+  if (!agentHistoryPollTimer) {
+    loadLocalAiHistory();
+    agentHistoryPollTimer = setInterval(() => loadLocalAiHistory(), 20000);
+  }
+  scheduleNextMediaPoll(100);
+  if (!clipboardPollTimer) {
+    try { lastClipboardText = clipboard.readText() || ''; } catch {}
+    clipboardPollTimer = setInterval(() => {
+      try {
+        const txt = clipboard.readText();
+        if (txt && txt.trim() && txt !== lastClipboardText) {
+          lastClipboardText = txt;
+          clipboardHistory = [
+            {
+              id: Date.now(),
+              text: txt.slice(0, 300),
+              time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+            },
+            ...clipboardHistory.filter((item) => item.text !== txt),
+          ].slice(0, 15);
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('clipboard-update', clipboardHistory);
+          }
+        }
+      } catch {}
+    }, 2000);
+  }
+}
+
+function setGameModeActive(active) {
+  const nextActive = Boolean(active);
+  if (gameModeActive === nextActive) return;
+  gameModeActive = nextActive;
+
+  if (nextActive) {
+    gameModeSettingsWasVisible = Boolean(settingsWindow && !settingsWindow.isDestroyed() && settingsWindow.isVisible());
+    stopBackgroundPolling();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      animateWindowShapeToMode('idle');
+      mainWindow.webContents.send('game-mode-change', true);
+    }
+    if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.hide();
+    return;
+  }
+
+  startBackgroundPolling();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('game-mode-change', false);
+  if (gameModeSettingsWasVisible && settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.showInactive();
+  gameModeSettingsWasVisible = false;
+}
 
 function startSystemWatcher() {
   try {
     const watcherScript = path.join(__dirname, 'win-system-watcher.ps1');
     systemWatcherProc = spawn(
       'powershell.exe',
-      ['-WindowStyle', 'Hidden', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', watcherScript],
+      ['-WindowStyle', 'Hidden', '-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', watcherScript, '-ElectronPid', String(process.pid)],
       { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }
     );
     let buffer = '';
@@ -1439,6 +1693,28 @@ function startSystemWatcher() {
         if (!trimmed.startsWith('{')) continue;
         try {
           const ev = JSON.parse(trimmed);
+          if (ev.event === 'game-mode') {
+            setGameModeActive(ev.active);
+            continue;
+          }
+          if (ev.event === 'ghelper-notification') {
+            const parsed = resolveGHelperToast(ev.title);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('system-hud', {
+                type: 'ghelper',
+                value: 0,
+                ghelper: {
+                  raw: ev.title,
+                  label: parsed?.label || 'G-Helper',
+                  icon: parsed?.icon || 'ghelper',
+                  valueText: parsed?.valueText || ev.title,
+                  category: parsed?.category || 'generic',
+                },
+                isInit: false,
+              });
+            }
+            continue;
+          }
           if (!mainWindow || mainWindow.isDestroyed()) continue;
           // Suppress any volume HUD popup during startup grace period (first 4.5 seconds)
           const isStartupGrace = Date.now() - watcherStartedAt < 4500;
@@ -1504,6 +1780,12 @@ function startSystemWatcher() {
 }
 
 app.on('will-quit', () => {
+  stopBackgroundPolling();
+  stopLocalAgentServers();
+  if (ghelperBridgeClient) {
+    try { ghelperBridgeClient.stop(); } catch {}
+    ghelperBridgeClient = null;
+  }
   if (systemWatcherProc) {
     try {
       systemWatcherProc.kill();
@@ -1518,53 +1800,98 @@ app.whenReady().then(() => {
   loadSavedGoogleSession();
   createWindow();
   createTray();
-  startLocalAgentServers();
+  const agentStatus = getAgentIntegrationStatus();
+  if (agentStatus.codexConnected || agentStatus.antigravityConnected) startLocalAgentServers();
   startCursorHoverWatcher();
   startSystemWatcher();
-  registerGlobalShortcuts();
-  startGoogleMailAndAgendaWatcher();
 
-  setTimeout(() => loadLocalAiHistory(), 100);
-  // External CLI histories change occasionally; avoid repeatedly parsing large state files.
-  setInterval(() => loadLocalAiHistory(), 15000);
-
-  setTimeout(() => pollWindowsMedia('status'), 600);
-  setInterval(() => pollWindowsMedia('status'), 3000);
-
+  // Start elevated GHelper bridge pipe listener
   try {
-    lastClipboardText = clipboard.readText() || '';
-  } catch {}
+    ghelperBridgeClient = new GHelperBridgeClient({
+      onToast: (toast) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send('system-hud', {
+          type: 'ghelper',
+          value: 0,
+          ghelper: toast,
+          isInit: false,
+        });
+      },
+      onStatus: (status) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send('ghelper-status-update', status);
+      },
+    });
+    ghelperBridgeClient.start();
+  } catch (err) {
+    console.warn('[Main] GHelper pipe bridge setup error:', err.message);
+  }
 
+  // Periodic RAM trimming & Garbage Collection (every 60s)
   setInterval(() => {
     try {
-      const txt = clipboard.readText();
-      if (txt && txt.trim() && txt !== lastClipboardText) {
-        lastClipboardText = txt;
-        clipboardHistory = [
-          {
-            id: Date.now(),
-            text: txt.slice(0, 600),
-            time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-          },
-          ...clipboardHistory.filter((item) => item.text !== txt),
-        ].slice(0, 25);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('clipboard-update', clipboardHistory);
-        }
+      if (global.gc) {
+        global.gc();
       }
     } catch {}
-  }, 1000);
+  }, 60000);
+
+  registerGlobalShortcuts();
+  startGoogleMailAndAgendaWatcher();
+  startBackgroundPolling();
 });
 
 ipcMain.on('set-ignore-mouse-events', (_event, _ignore) => {});
 
 ipcMain.on('set-expanded', (_event, expanded) => {
-  animateWindowShapeToMode(Boolean(expanded));
+  const isExp = Boolean(expanded);
+  animateWindowShapeToMode(isExp);
+  if (isExp) {
+    scheduleNextMediaPoll(50);
+  } else {
+    try { if (global.gc) global.gc(); } catch {}
+  }
 });
 
 ipcMain.on('set-island-mode', (_event, mode, customWidth) => {
   animateWindowShapeToMode(mode, customWidth);
+  if (mode === 'expanded' || mode === 'music-bar') {
+    scheduleNextMediaPoll(50);
+  } else if (mode === 'idle') {
+    try { if (global.gc) global.gc(); } catch {}
+  }
 });
+
+ipcMain.handle('get-ghelper-bridge-status', async () => {
+  return await checkGHelperTaskStatus();
+});
+
+ipcMain.handle('get-ghelper-status', () => {
+  return ghelperBridgeClient?.getGHelperStatus() || readGHelperStatus();
+});
+
+ipcMain.handle('install-ghelper-bridge', async () => {
+  const res = await installGHelperTask();
+  if (res.ok && ghelperBridgeClient) {
+    startGHelperTask();
+  }
+  return res;
+});
+
+ipcMain.handle('test-ghelper-hud', (_event, sampleText = 'Zone Test') => {
+  const parsed = resolveGHelperToast(sampleText);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('system-hud', {
+      type: 'ghelper',
+      value: 0,
+      ghelper: parsed,
+      isInit: false,
+    });
+  }
+  return { ok: true, parsed };
+});
+
+ipcMain.handle('is-game-mode-active', () => gameModeActive);
 
 ipcMain.handle('open-settings-window', (_event, tabId) => {
   openOrFocusSettingsWindow(tabId || 'home');
@@ -1615,11 +1942,24 @@ ipcMain.on('trigger-island-emotion', (_event, emotion) => {
 
 ipcMain.on('trigger-test-notification', (_event, notif) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
+    let resolvedApp = notif?.app || 'TwoCode';
+    if (!notif?.app && typeof notif?.title === 'string') {
+      const lower = notif.title.toLowerCase();
+      if (lower.includes('whatsapp')) resolvedApp = 'WhatsApp';
+      else if (lower.includes('discord')) resolvedApp = 'Discord';
+      else if (lower.includes('spotify')) resolvedApp = 'Spotify';
+      else if (lower.includes('claude')) resolvedApp = 'Claude';
+      else if (lower.includes('chatgpt')) resolvedApp = 'ChatGPT';
+      else if (lower.includes('chrome')) resolvedApp = 'Chrome';
+      else if (lower.includes('telegram')) resolvedApp = 'Telegram';
+    }
     mainWindow.webContents.send('windows-notification', {
       id: 'notif_' + Date.now(),
-      app: 'TwoCode',
-      title: notif?.title || 'Claude Code is done',
-      body: notif?.subtitle || 'checkout: Fixed the checkout total',
+      app: resolvedApp,
+      title: notif?.title || 'TwoCode Bildirim',
+      body: notif?.subtitle || notif?.body || 'Bildirim içeriği başarıyla görüntülendi',
+      accentHex: notif?.accentHex,
+      appLogoUri: notif?.appLogoUri,
     });
   }
 });
@@ -1628,8 +1968,69 @@ ipcMain.handle('get-ai-history', async () => {
   return loadLocalAiHistory();
 });
 
-ipcMain.handle('media-control', async (_event, action) => {
-  return await pollWindowsMedia(action);
+ipcMain.handle('get-agent-integration-status', async () => getAgentIntegrationStatus());
+
+ipcMain.handle('connect-agent-integrations', async () => {
+  try {
+    const status = await connectAgentIntegrations();
+    startLocalAgentServers();
+    return { ok: true, status };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+ipcMain.handle('test-agent-integration', async (_event, agent = 'Codex') => {
+  const payload = JSON.stringify({ agent, type: 'done', title: `${agent} bağlantı testi`, event: 'test' });
+  return new Promise((resolve) => {
+    const request = http.request({ hostname: '127.0.0.1', port: 4242, path: '/api/agent', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }, timeout: 2500 }, (response) => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => { body += chunk; });
+      response.on('end', () => resolve({ ok: response.statusCode === 200, statusCode: response.statusCode, body }));
+    });
+    request.on('timeout', () => request.destroy(new Error('Agent server timeout')));
+    request.on('error', (error) => resolve({ ok: false, error: error.message }));
+    request.end(payload);
+  });
+});
+
+ipcMain.handle('media-control', async (_event, action, value) => {
+  const res = await pollWindowsMedia(action, value);
+  scheduleNextMediaPoll(100);
+  return res;
+});
+
+async function openGHelper() {
+  const primaryPath = 'C:\\Users\\Bedirhan Orseloglu\\OneDrive\\Masaüstü\\GHelper.exe';
+  const candidatePaths = [
+    primaryPath,
+    path.join(os.homedir(), 'OneDrive', 'Masaüstü', 'GHelper.exe'),
+    path.join(os.homedir(), 'Desktop', 'GHelper.exe'),
+    path.join(os.homedir(), 'OneDrive', 'Desktop', 'GHelper.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'GHelper', 'GHelper.exe'),
+    'C:\\Program Files\\GHelper\\GHelper.exe',
+  ];
+
+  const targetPath = candidatePaths.find((p) => p && fs.existsSync(p)) || primaryPath;
+
+  try {
+    const err = await shell.openPath(targetPath);
+    if (!err) {
+      return { ok: true, path: targetPath, method: 'openPath' };
+    }
+  } catch (e) {}
+
+  // Fallback if shell.openPath encounters any issues
+  try {
+    execFile('cmd.exe', ['/c', 'start', '""', targetPath], { windowsHide: true }, () => {});
+  } catch (e) {}
+
+  return { ok: true, path: targetPath };
+}
+
+ipcMain.handle('open-ghelper', async () => {
+  return openGHelper();
 });
 
 ipcMain.handle('launch-music-service', async (_event, service) => {
@@ -1737,7 +2138,15 @@ ipcMain.handle('open-app', async (_event, target = {}) => {
 });
 
 ipcMain.handle('open-notification-target', async (_event, target = {}) => {
+  let loweredOverlay = false;
   try {
+    // Let the launched app/browser take the foreground instead of being covered by the island.
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (notificationTargetFocusTimer) clearTimeout(notificationTargetFocusTimer);
+      mainWindow.setAlwaysOnTop(false);
+      loweredOverlay = true;
+    }
+
     if (typeof target.url === 'string' && target.url) {
       const parsed = new URL(target.url);
       if (!['https:', 'http:'].includes(parsed.protocol)) return false;
@@ -1751,6 +2160,15 @@ ipcMain.handle('open-notification-target', async (_event, target = {}) => {
     }
   } catch (error) {
     console.warn('Could not open notification target:', error.message);
+  } finally {
+    if (loweredOverlay) {
+      notificationTargetFocusTimer = setTimeout(() => {
+        notificationTargetFocusTimer = null;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setAlwaysOnTop(true, 'screen-saver');
+        }
+      }, 2500);
+    }
   }
   return false;
 });
@@ -2135,7 +2553,7 @@ function startGoogleMailAndAgendaWatcher() {
     } catch (e) {}
 
     // Mail polling is paused; calendar reminders are checked above.
-  }, 5000);
+  }, 30000);
 }
 
 ipcMain.handle('test-mail-notif', async () => {

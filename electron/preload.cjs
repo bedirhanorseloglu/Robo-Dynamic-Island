@@ -9,6 +9,12 @@ contextBridge.exposeInMainWorld('twocode', {
     ipcRenderer.on('notch-hover-change', listener);
     return () => ipcRenderer.removeListener('notch-hover-change', listener);
   },
+  onGameModeChange: (cb) => {
+    const listener = (_event, active) => cb(Boolean(active));
+    ipcRenderer.on('game-mode-change', listener);
+    return () => ipcRenderer.removeListener('game-mode-change', listener);
+  },
+  isGameModeActive: () => ipcRenderer.invoke('is-game-mode-active'),
   openSettingsWindow: (tab) => ipcRenderer.invoke('open-settings-window', tab),
   settingsWindowControl: (action) => ipcRenderer.send('settings-window-control', action),
   getSettings: () => ipcRenderer.invoke('get-settings'),
@@ -32,12 +38,25 @@ contextBridge.exposeInMainWorld('twocode', {
   },
   triggerTestNotification: (notif) => ipcRenderer.send('trigger-test-notification', notif),
   getAiHistory: () => ipcRenderer.invoke('get-ai-history'),
+  getAgentIntegrationStatus: () => ipcRenderer.invoke('get-agent-integration-status'),
+  connectAgentIntegrations: () => ipcRenderer.invoke('connect-agent-integrations'),
+  testAgentIntegration: (agent) => ipcRenderer.invoke('test-agent-integration', agent),
+  getGHelperBridgeStatus: () => ipcRenderer.invoke('get-ghelper-bridge-status'),
+  installGHelperBridge: () => ipcRenderer.invoke('install-ghelper-bridge'),
+  testGHelperHud: (sampleText) => ipcRenderer.invoke('test-ghelper-hud', sampleText),
+  getGHelperStatus: () => ipcRenderer.invoke('get-ghelper-status'),
+  onGHelperStatusUpdate: (cb) => {
+    const listener = (_event, data) => cb(data);
+    ipcRenderer.on('ghelper-status-update', listener);
+    return () => ipcRenderer.removeListener('ghelper-status-update', listener);
+  },
   onAiHistoryUpdate: (cb) => {
     const listener = (_event, data) => cb(data);
     ipcRenderer.on('ai-history-update', listener);
     return () => ipcRenderer.removeListener('ai-history-update', listener);
   },
-  mediaControl: (action) => ipcRenderer.invoke('media-control', action),
+  mediaControl: (action, value) => ipcRenderer.invoke('media-control', action, value),
+  openGHelper: () => ipcRenderer.invoke('open-ghelper'),
   launchMusicService: (service) => ipcRenderer.invoke('launch-music-service', service),
   getMediaStatus: () => ipcRenderer.invoke('get-media-status'),
   onMediaUpdate: (cb) => {

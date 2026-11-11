@@ -35,6 +35,9 @@ import {
   Eye,
   EyeOff,
   Type,
+  Monitor,
+  Link2,
+  RefreshCw,
 } from 'lucide-react';
 import './settings.css';
 import { playRoboSound, playNotifSound } from './sounds';
@@ -102,7 +105,7 @@ const DEFAULT_SETTINGS = {
 
 const PAGE_HEADERS = {
   home: { title: 'Home', subtitle: '' },
-  connections: { title: 'Connections', subtitle: 'Which AIs Robo keeps an eye on for you' },
+  connections: { title: 'Agents', subtitle: 'Connect Codex and Antigravity to TwoCode' },
   aichat: { title: 'AI & Chat', subtitle: "Which AI Robo's chat talks to" },
   apps: { title: 'Apps', subtitle: 'Pick which apps are in your TwoCode' },
   robo: { title: 'Robo', subtitle: 'His name, eyes, behaviour and badges', hasSearch: true },
@@ -240,6 +243,12 @@ export default function SettingsApp() {
     claudeJobs: [],
     jobsToday: 2,
   });
+  const [agentIntegration, setAgentIntegration] = useState({ codexConnected: false, antigravityConnected: false, antigravityIdePath: '' });
+  const [agentIntegrationBusy, setAgentIntegrationBusy] = useState(false);
+  const [agentIntegrationMessage, setAgentIntegrationMessage] = useState('');
+  const [ghelperStatus, setGhelperStatus] = useState({ installed: false, running: false });
+  const [ghelperBusy, setGhelperBusy] = useState(false);
+  const [ghelperMessage, setGhelperMessage] = useState('');
 
   // Inputs for Apps page
   const [newAppName, setNewAppName] = useState('');
@@ -317,6 +326,14 @@ export default function SettingsApp() {
       if (hist) setAiHistory(hist);
     });
 
+    window.twocode.getAgentIntegrationStatus?.().then((status) => {
+      if (status) setAgentIntegration(status);
+    });
+
+    window.twocode.getGHelperBridgeStatus?.().then((status) => {
+      if (status) setGhelperStatus(status);
+    });
+
     const unsubAi = window.twocode.onAiHistoryUpdate?.((hist) => {
       if (hist) setAiHistory(hist);
     });
@@ -343,6 +360,51 @@ export default function SettingsApp() {
       window.twocode?.saveSettings?.(next);
       return next;
     });
+  };
+
+  const connectAgentTools = async () => {
+    setAgentIntegrationBusy(true);
+    setAgentIntegrationMessage('');
+    const result = await window.twocode?.connectAgentIntegrations?.();
+    if (result?.ok) {
+      setAgentIntegration(result.status);
+      setAgentIntegrationMessage('Connections installed. Restart Codex and Antigravity to load their hooks.');
+    } else {
+      setAgentIntegrationMessage(result?.error || 'Could not install the agent connections.');
+    }
+    setAgentIntegrationBusy(false);
+  };
+
+  const testAgentTool = async (agent) => {
+    setAgentIntegrationBusy(true);
+    const result = await window.twocode?.testAgentIntegration?.(agent);
+    setAgentIntegrationMessage(result?.ok ? `${agent} test event reached TwoCode.` : (result?.error || 'TwoCode agent listener is not responding.'));
+    setAgentIntegrationBusy(false);
+  };
+
+  const installGHelperBridge = async () => {
+    setGhelperBusy(true);
+    setGhelperMessage('');
+    const res = await window.twocode?.installGHelperBridge?.();
+    if (res?.ok) {
+      setGhelperStatus(res.status || { installed: true, running: true });
+      setGhelperMessage('G-Helper bridge task installed successfully.');
+    } else {
+      setGhelperMessage(res?.error || 'Could not install G-Helper bridge task.');
+    }
+    setGhelperBusy(false);
+  };
+
+  const testGHelperHud = async (sample) => {
+    await window.twocode?.testGHelperHud?.(sample);
+  };
+
+  const chooseAntigravityIde = async () => {
+    const pickedPath = await window.twocode?.pickProgramFile?.();
+    if (pickedPath) {
+      updateSetting({ antigravityIdePath: pickedPath });
+      setAgentIntegration((current) => ({ ...current, antigravityIdePath: pickedPath }));
+    }
   };
 
   const formatTimeHHMM = (d) => {
@@ -472,8 +534,8 @@ export default function SettingsApp() {
   const triggerTestNotificationOnIsland = () => {
     playNotifSound(settings.notifSound || 'Ding', settings.soundEffects !== false);
     window.twocode?.triggerTestNotification?.({
-      title: 'Claude Code is done',
-      subtitle: 'checkout: Fixed the checkout total',
+      title: selectedNotifItem,
+      subtitle: 'Your notification preview is ready',
       color: settings.notifColor,
     });
   };
@@ -491,6 +553,11 @@ export default function SettingsApp() {
     const q = activitySearch.toLowerCase();
     return all.filter((item) => (item.title || '').toLowerCase().includes(q));
   }, [aiHistory, activitySearch]);
+
+  const recentAgentJobs = useMemo(() => [
+    ...(aiHistory.antigravityJobs || []),
+    ...(aiHistory.codexJobs || []),
+  ].sort((a, b) => String(b.time || '').localeCompare(String(a.time || ''))).slice(0, 4), [aiHistory]);
 
   return (
     <div className="twocode-settings-window">
@@ -518,7 +585,7 @@ export default function SettingsApp() {
             <span className="nav-section-label">TWOCODE</span>
             {[
               { id: 'home', label: 'Home', icon: Home },
-              { id: 'connections', label: 'Connections', icon: Plug },
+              { id: 'connections', label: 'Agents', icon: Plug },
               { id: 'aichat', label: 'AI & Chat', icon: MessageSquare },
               { id: 'apps', label: 'Apps', icon: LayoutGrid },
             ].map((item) => {
@@ -846,7 +913,7 @@ export default function SettingsApp() {
                       <span className="ql-icon green">
                         <Plug size={15} />
                       </span>
-                      <strong>Connections</strong>
+                      <strong>Agents</strong>
                     </div>
                     <ChevronRight size={15} />
                   </button>
@@ -886,9 +953,57 @@ export default function SettingsApp() {
             ============================================================ */}
         {activePage === 'connections' && (
           <div className="settings-page-body">
-            <p className="page-lead-text">
-              Turn on what you use. TwoCode does the rest: no windows to pick, no code.
-            </p>
+            <section className="agents-hero">
+              <div className="agents-hero-orbit agents-hero-orbit-one" />
+              <div className="agents-hero-orbit agents-hero-orbit-two" />
+              <div className="agents-hero-copy">
+                <span className="agents-eyebrow"><Sparkles size={12} /> YOUR LOCAL AGENT DESK</span>
+                <h2>All your agents,<br /><span>one quiet signal.</span></h2>
+                <p>See when Codex or Antigravity starts thinking and when its answer is ready. Activity stays on this PC and appears in the Island.</p>
+              </div>
+              <div className="agents-hero-action">
+                <span className={`agents-bridge-status ${agentIntegration.codexConnected || agentIntegration.antigravityConnected ? 'is-ready' : ''}`}><i />{agentIntegration.codexConnected || agentIntegration.antigravityConnected ? 'Bridge ready' : 'Bridge not connected'}</span>
+                <button type="button" className="agent-connect-button" onClick={connectAgentTools} disabled={agentIntegrationBusy}>
+                  {agentIntegrationBusy ? <RefreshCw size={14} className="agent-spin-icon" /> : <Link2 size={14} />}
+                  {agentIntegrationBusy ? 'Connecting…' : agentIntegration.codexConnected && agentIntegration.antigravityConnected ? 'Refresh setup' : 'Connect agents'}
+                </button>
+              </div>
+            </section>
+            {agentIntegrationMessage && <div className={`agent-integration-message ${agentIntegrationMessage.toLowerCase().includes('could not') || agentIntegrationMessage.toLowerCase().includes('not responding') ? 'error' : 'success'}`} role="status">{agentIntegrationMessage}</div>}
+
+            <div className="agents-summary-strip">
+              <div><span className="agents-summary-icon blue"><Link2 size={14} /></span><span><strong>{Number(agentIntegration.codexConnected) + Number(agentIntegration.antigravityConnected)}<small> / 2</small></strong><small>hooks installed</small></span></div>
+              <div><span className="agents-summary-icon mint"><Check size={14} /></span><span><strong>{aiHistory.jobsToday || 0}</strong><small>tasks today</small></span></div>
+              <div><span className="agents-summary-icon violet"><Bell size={14} /></span><span><strong>{recentAgentJobs.length ? recentAgentJobs[0].agent : 'Ready'}</strong><small>{recentAgentJobs.length ? `last active · ${recentAgentJobs[0].time}` : 'waiting for activity'}</small></span></div>
+            </div>
+
+            <div className="agent-connection-grid">
+              <section className="agent-connection-card codex" style={{ '--agent-rgb': '97, 152, 255', '--agent-hex': '#6198ff' }}>
+                <div className="agent-card-heading"><span className="ai-badge-icon lg codex"><i /><i /></span><div><strong>Codex</strong><span>App · CLI · VS Code</span></div><span className={`agent-status-pill ${agentIntegration.codexConnected ? 'connected' : ''}`}><i />{agentIntegration.codexConnected ? 'Hook ready' : 'Not connected'}</span></div>
+                <p className="agent-card-description">Get an Island signal when Codex starts and replies.</p>
+                <div className="agent-card-detail"><span>Local hook</span><code>{agentIntegration.codexConnected ? 'Installed · restart Codex' : '~/.codex/hooks.json'}</code></div>
+                <button type="button" className="agent-test-button" onClick={() => testAgentTool('Codex')} disabled={agentIntegrationBusy}><Play size={13} /> Preview notification</button>
+              </section>
+              <section className="agent-connection-card antigravity" style={{ '--agent-rgb': '73, 218, 202', '--agent-hex': '#49daca' }}>
+                <div className="agent-card-heading"><span className="ai-badge-icon lg antigravity"><i /><i /></span><div><strong>Antigravity</strong><span>App · standalone IDE</span></div><span className={`agent-status-pill ${agentIntegration.antigravityConnected ? 'connected' : ''}`}><i />{agentIntegration.antigravityConnected ? 'Hook ready' : 'Not connected'}</span></div>
+                <p className="agent-card-description">Follow thinking and finished replies in the app and IDE.</p>
+                <div className="agent-card-detail"><span>Global hook</span><code>{agentIntegration.antigravityConnected ? 'Installed · restart Antigravity' : '~/.gemini/config/hooks.json'}</code></div>
+                <div className="agent-card-actions">
+                  <button type="button" className="agent-test-button" onClick={() => testAgentTool('Antigravity IDE')} disabled={agentIntegrationBusy}><Play size={13} /> Preview notification</button>
+                  <button type="button" className="agent-secondary-button" onClick={chooseAntigravityIde}><Monitor size={13} /> {agentIntegration.antigravityIdePath ? 'Change IDE' : 'Locate IDE'}</button>
+                  {agentIntegration.antigravityIdePath && <button type="button" className="agent-secondary-button" onClick={() => window.twocode?.openApp?.({ type: 'native-app', path: agentIntegration.antigravityIdePath })}><ExternalLink size={13} /> Open IDE</button>}
+                </div>
+              </section>
+            </div>
+            <div className="agent-connection-footnote"><RefreshCw size={12} /> Existing hook settings are preserved. Codex asks you to review the new hook once.</div>
+
+            <section className="agent-activity-panel">
+              <div className="agent-activity-heading"><div><span className="agents-eyebrow"><Sparkles size={11} /> LIVE ACTIVITY</span><strong>Recent agent work</strong></div><span>{recentAgentJobs.length} recent</span></div>
+              {recentAgentJobs.length ? <div className="agent-activity-list">{recentAgentJobs.slice(0, 4).map((job, index) => {
+                const antigravityJob = (job.agent || '').toLowerCase().includes('antigravity');
+                return <div className="agent-activity-row" key={job.id || `${job.time}-${index}`} style={{ '--agent-rgb': antigravityJob ? '73, 218, 202' : '97, 152, 255' }}><span className={`agent-activity-marker ${antigravityJob ? 'antigravity' : ''}`}><i /></span><div><strong>{job.title}</strong><span>{job.agent || 'Agent'} · {job.time || 'Recently'}</span></div><span className="agent-activity-state"><Check size={11} /> Done</span></div>;
+              })}</div> : <div className="agent-activity-empty"><span><Bot size={16} /></span><div><strong>No agent activity yet</strong><small>Connect an agent and its finished tasks will show up here.</small></div></div>}
+            </section>
 
             <span className="section-eyebrow">LINKED</span>
             <div className="settings-card">
@@ -1276,49 +1391,13 @@ export default function SettingsApp() {
                   <div className="row-text-col" style={{ width: '100%' }}>
                     <strong>Antigravity</strong>
                     <span>
-                      DeepMind Agentic IDE & coding assistant with subagents and artifacts.
+                      Monitors Antigravity App and the standalone IDE through the local activity hook.
                     </span>
-
-                    <div className="ai-api-key-box">
-                      <button
-                        type="button"
-                        className="ai-get-key-btn"
-                        onClick={() =>
-                          window.twocode?.openExternal?.('https://aistudio.google.com/app/apikey')
-                        }
-                        title="Google DeepMind Gemini API Anahtarı Al"
-                      >
-                        <ExternalLink size={12} />
-                        <span>Get API Key</span>
-                      </button>
-                      <div className="ai-api-key-input-wrap">
-                        <input
-                          type={showKeyAntigravity ? 'text' : 'password'}
-                          className="ai-api-key-input"
-                          placeholder="AIzaSy... / AGY Token"
-                          value={settings.antigravityApiKey || ''}
-                          onChange={(e) =>
-                            updateSetting({ antigravityApiKey: e.target.value.trim() })
-                          }
-                        />
-                        <button
-                          type="button"
-                          className="ai-api-key-eye-btn"
-                          onClick={() => setShowKeyAntigravity(!showKeyAntigravity)}
-                          title={showKeyAntigravity ? 'Gizle' : 'Göster'}
-                        >
-                          {showKeyAntigravity ? <EyeOff size={13} /> : <Eye size={13} />}
-                        </button>
-                      </div>
-                      {settings.antigravityApiKey ? (
-                        <span className="key-saved-pill">✓ Saved</span>
-                      ) : null}
-                    </div>
                   </div>
                 </div>
                 <div className="row-right-group">
-                  <span className={`status-badge ${settings.antigravityApiKey ? 'green' : 'amber'}`}>
-                    {settings.antigravityApiKey ? 'API key saved' : 'No API key'}
+                  <span className={`status-badge ${agentIntegration.antigravityConnected ? 'green' : 'amber'}`}>
+                    {agentIntegration.antigravityConnected ? 'Hook installed' : 'Not connected'}
                   </span>
                   <button
                     type="button"
@@ -1345,7 +1424,7 @@ export default function SettingsApp() {
         {activePage === 'aichat' && (
           <div className="settings-page-body">
             <p className="page-lead-text">
-              Robo&apos;s chat uses the AI you turned on in Connections. Both on? Then you pick one
+              Robo&apos;s chat uses the AI you turned on in Agents. Both on? Then you pick one
               in the chat.
             </p>
 
@@ -2285,6 +2364,61 @@ export default function SettingsApp() {
                 </div>
               </div>
 
+              {/* G-Helper Bridge Section */}
+              <div className="notif-top-toggles ghelper-settings-card">
+                <div className="notif-toggle-line">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: ghelperStatus.running ? '#10B981' : ghelperStatus.installed ? '#F59E0B' : '#EF4444' }} />
+                      G-Helper Bridge
+                    </strong>
+                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>
+                      {ghelperStatus.running ? 'Connected · OSD routed to Island' : ghelperStatus.installed ? 'Installed (Not running)' : 'Requires elevated task setup'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="agent-connect-button"
+                    style={{ padding: '4px 10px', fontSize: '11px', height: 'auto' }}
+                    onClick={installGHelperBridge}
+                    disabled={ghelperBusy}
+                  >
+                    {ghelperBusy ? 'Setting up…' : ghelperStatus.installed ? 'Reinstall' : 'Connect'}
+                  </button>
+                </div>
+                {ghelperMessage && (
+                  <div style={{ fontSize: '11px', color: ghelperMessage.includes('Could not') ? '#F87171' : '#34D399', marginTop: '4px' }}>
+                    {ghelperMessage}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    className="settings-subtab-btn"
+                    style={{ fontSize: '10.5px', padding: '3px 8px' }}
+                    onClick={() => testGHelperHud('Yüksek')}
+                  >
+                    Test Klavye
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-subtab-btn"
+                    style={{ fontSize: '10.5px', padding: '3px 8px' }}
+                    onClick={() => testGHelperHud('Ses açık')}
+                  >
+                    Test Mic
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-subtab-btn"
+                    style={{ fontSize: '10.5px', padding: '3px 8px' }}
+                    onClick={() => testGHelperHud('Zone Test')}
+                  >
+                    Test Aura
+                  </button>
+                </div>
+              </div>
+
               {NOTIFICATION_ITEMS.map((grp) => (
                 <div key={grp.group} className="notif-group-block">
                   <span className="notif-group-title">{grp.group}</span>
@@ -2305,9 +2439,7 @@ export default function SettingsApp() {
             <div className="notif-right-detail">
               <div
                 className="notif-preview-stage"
-                style={{
-                  background: `radial-gradient(ellipse 80% 75% at 50% 100%, ${settings.notifColor}55 0%, #090d1a 75%)`,
-                }}
+                style={{ '--notif-preview-accent': settings.notifColor }}
               >
                 <div className="notif-preview-island">
                   <span
@@ -2317,8 +2449,9 @@ export default function SettingsApp() {
                     <Check size={14} strokeWidth={3} color="#fff" />
                   </span>
                   <div className="notif-preview-copy">
+                    <small>TWOCODE · JUST NOW</small>
                     <strong>{selectedNotifItem}</strong>
-                    <span>checkout: Fixed the checkout total</span>
+                    <span>Your notification is ready to view</span>
                   </div>
                 </div>
                 <button
