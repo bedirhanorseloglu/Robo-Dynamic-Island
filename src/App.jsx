@@ -1422,12 +1422,14 @@ export default function App() {
   }, [liveMedia?.position, liveMedia?.title, isScrubbing]);
 
   // Advance by real elapsed time so lyric timing stays locked to the media clock.
+  // ONLY run when media is actively playing to save CPU and RAM idle churn.
   useEffect(() => {
+    if (!liveMedia?.isPlaying || isScrubbing) return;
+    lastMediaTickRef.current = Date.now();
     const mediaTick = setInterval(() => {
       const now = Date.now();
       const elapsed = Math.min(1, Math.max(0, (now - lastMediaTickRef.current) / 1000));
       lastMediaTickRef.current = now;
-      if (isScrubbing) return;
       const media = liveMediaRef.current;
       if (!media || !media.hasSession || !media.isPlaying) return;
       setSmoothPosition((prev) => {
@@ -1436,7 +1438,7 @@ export default function App() {
       });
     }, 250);
     return () => clearInterval(mediaTick);
-  }, [isScrubbing]);
+  }, [liveMedia?.isPlaying, isScrubbing]);
 
   // Active media comes strictly from live Windows SMTC with sub-second smooth position
   const currentMedia = useMemo(() => {
@@ -1701,8 +1703,18 @@ export default function App() {
     };
   }, []);
 
-  // Clock & Timers tick every 1s + smooth client-side media position interpolation
+  // Synchronize clock immediately whenever island is expanded
   useEffect(() => {
+    if (islandMode === 'expanded') {
+      setNow(new Date());
+    }
+  }, [islandMode]);
+
+  // Clock & Focus timer: Ticks every 1s when expanded or timer is actively counting down;
+  // otherwise idles down to 30s ticks to avoid continuous React re-renders and V8 heap churn.
+  useEffect(() => {
+    const isHighFrequencyNeeded = islandMode === 'expanded' || timerRunning;
+    const intervalMs = isHighFrequencyNeeded ? 1000 : 30000;
     const timer = setInterval(() => {
       setNow(new Date());
       setTimerSeconds((prev) => {
@@ -1716,10 +1728,9 @@ export default function App() {
         }
         return prev - 1;
       });
-
-    }, 1000);
+    }, intervalMs);
     return () => clearInterval(timer);
-  }, [timerRunning, focusMinutes, islandSettings.notifSound, islandSettings.soundEffects, triggerRoboReaction]);
+  }, [islandMode, timerRunning, focusMinutes, islandSettings.notifSound, islandSettings.soundEffects]);
 
   // Connect to Electron IPC bridges
   useEffect(() => {

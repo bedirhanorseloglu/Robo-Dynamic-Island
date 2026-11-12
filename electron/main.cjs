@@ -31,15 +31,43 @@ const {
 } = require('./ghelper-service.cjs');
 
 app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=96');
+app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=96 --optimize-for-size');
 app.commandLine.appendSwitch('disable-breakpad');
 app.commandLine.appendSwitch('disable-component-update');
 app.commandLine.appendSwitch('disable-dev-shm-usage');
 app.commandLine.appendSwitch('disable-background-networking');
 app.commandLine.appendSwitch('disable-default-apps');
 app.commandLine.appendSwitch('disable-sync');
+app.commandLine.appendSwitch('disable-domain-reliability');
+app.commandLine.appendSwitch('disable-print-preview');
+app.commandLine.appendSwitch('disable-speech-api');
+app.commandLine.appendSwitch('disable-speech-synthesis-api');
+app.commandLine.appendSwitch('disable-extensions');
 app.commandLine.appendSwitch('enable-features', 'TrimOnMemoryPressure');
-app.commandLine.appendSwitch('disable-features', 'SpareRendererForSitePerProcess,CalculateNativeWinOcclusion,InterestFeedContentSuggestions');
+app.commandLine.appendSwitch(
+  'disable-features',
+  'SpareRendererForSitePerProcess,CalculateNativeWinOcclusion,InterestFeedContentSuggestions,AutofillServerCommunication,CertificateTransparencyComponentUpdater'
+);
+
+function trimWorkingSetAndGC() {
+  try {
+    if (global.gc) {
+      global.gc();
+    }
+  } catch {}
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents
+        .executeJavaScript('if (window.gc) { try { window.gc(); } catch(e){} }', true)
+        .catch(() => {});
+    }
+  } catch {}
+  try {
+    if (process.platform === 'win32' && typeof process.trimWorkingSet === 'function') {
+      process.trimWorkingSet();
+    }
+  } catch {}
+}
 
 const CANVAS_WIDTH = 700;
 const CANVAS_HEIGHT = 320;
@@ -1192,6 +1220,8 @@ function openOrFocusSettingsWindow(tabId = 'home') {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      spellcheck: false,
+      backgroundThrottling: true,
     },
   });
 
@@ -1215,6 +1245,7 @@ function openOrFocusSettingsWindow(tabId = 'home') {
 
   settingsWindow.on('closed', () => {
     settingsWindow = null;
+    trimWorkingSetAndGC();
   });
 }
 
@@ -1525,6 +1556,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      spellcheck: false,
     },
   });
 
@@ -1842,11 +1874,7 @@ app.whenReady().then(() => {
 
   // Periodic RAM trimming, Garbage Collection & bridge health check (every 60s)
   setInterval(async () => {
-    try {
-      if (global.gc) {
-        global.gc();
-      }
-    } catch {}
+    trimWorkingSetAndGC();
     try {
       const taskStatus = await checkGHelperTaskStatus();
       if (taskStatus.installed && !taskStatus.running) {
@@ -1869,7 +1897,7 @@ ipcMain.on('set-expanded', (_event, expanded) => {
   if (isExp) {
     scheduleNextMediaPoll(50);
   } else {
-    try { if (global.gc) global.gc(); } catch {}
+    trimWorkingSetAndGC();
   }
 });
 
@@ -1878,7 +1906,7 @@ ipcMain.on('set-island-mode', (_event, mode, customWidth) => {
   if (mode === 'expanded' || mode === 'music-bar') {
     scheduleNextMediaPoll(50);
   } else if (mode === 'idle') {
-    try { if (global.gc) global.gc(); } catch {}
+    trimWorkingSetAndGC();
   }
 });
 

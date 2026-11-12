@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App';
-import SettingsApp from './SettingsApp';
 import './styles.css';
 import './typography.css';
 import { initializeTypography } from './typography';
+
+const App = lazy(() => import('./App'));
+const SettingsApp = lazy(() => import('./SettingsApp'));
 
 initializeTypography();
 
@@ -74,7 +75,9 @@ const isSettingsWindow =
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <GlobalErrorBoundary>
-      {isSettingsWindow ? <SettingsApp /> : <App />}
+      <Suspense fallback={null}>
+        {isSettingsWindow ? <SettingsApp /> : <App />}
+      </Suspense>
     </GlobalErrorBoundary>
   </React.StrictMode>
 );
