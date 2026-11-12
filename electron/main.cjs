@@ -1216,6 +1216,7 @@ function openOrFocusSettingsWindow(tabId = 'home') {
     frame: false,
     backgroundColor: '#060608',
     title: 'TwoCode Settings',
+    skipTaskbar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -1224,6 +1225,7 @@ function openOrFocusSettingsWindow(tabId = 'home') {
       backgroundThrottling: true,
     },
   });
+  settingsWindow.setSkipTaskbar(true);
 
   const distHtml = path.join(__dirname, '../dist/index.html');
   if (process.env.VITE_DEV_SERVER_URL) {
@@ -1539,7 +1541,7 @@ function createWindow() {
     height: CANVAS_HEIGHT,
     x,
     y: 0,
-    show: true,
+    show: false,
     frame: false,
     thickFrame: false,
     transparent: false,
@@ -1551,6 +1553,7 @@ function createWindow() {
     fullscreenable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
+    type: 'toolbar',
     hasShadow: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -1559,6 +1562,8 @@ function createWindow() {
       spellcheck: false,
     },
   });
+
+  mainWindow.setSkipTaskbar(true);
 
   // Keep the overlay visible to the user while excluding its contents from screen captures.
   if (process.platform === 'win32' && typeof mainWindow.setContentProtection === 'function') {
@@ -1571,7 +1576,8 @@ function createWindow() {
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   mainWindow.webContents.on('did-finish-load', () => {
-    mainWindow.show();
+    mainWindow.setSkipTaskbar(true);
+    mainWindow.showInactive();
     mainWindow.moveTop();
     mainWindow.webContents.send('ai-history-update', localAgentHistory);
     mainWindow.webContents.send('settings-updated', userSettings);
@@ -1952,8 +1958,9 @@ ipcMain.handle('open-settings-window', (_event, tabId) => {
 
 ipcMain.on('settings-window-control', (_event, action) => {
   if (!settingsWindow || settingsWindow.isDestroyed()) return;
-  if (action === 'minimize') settingsWindow.minimize();
-  else if (action === 'maximize') {
+  if (action === 'minimize') {
+    settingsWindow.hide();
+  } else if (action === 'maximize') {
     if (settingsWindow.isMaximized()) settingsWindow.unmaximize();
     else settingsWindow.maximize();
   } else if (action === 'close') {
