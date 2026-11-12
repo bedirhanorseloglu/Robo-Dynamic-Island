@@ -1827,11 +1827,31 @@ app.whenReady().then(() => {
     console.warn('[Main] GHelper pipe bridge setup error:', err.message);
   }
 
-  // Periodic RAM trimming & Garbage Collection (every 60s)
-  setInterval(() => {
+  // Automatically ensure the elevated G-Helper bridge background task is running on startup
+  setTimeout(async () => {
+    try {
+      const taskStatus = await checkGHelperTaskStatus();
+      if (taskStatus.installed && !taskStatus.running) {
+        console.log('[Main] Auto-starting G-Helper bridge task...');
+        await startGHelperTask();
+      }
+    } catch (err) {
+      console.warn('[Main] G-Helper bridge task auto-start error:', err.message);
+    }
+  }, 2000);
+
+  // Periodic RAM trimming, Garbage Collection & bridge health check (every 60s)
+  setInterval(async () => {
     try {
       if (global.gc) {
         global.gc();
+      }
+    } catch {}
+    try {
+      const taskStatus = await checkGHelperTaskStatus();
+      if (taskStatus.installed && !taskStatus.running) {
+        console.log('[Main] Background check: G-Helper bridge task stopped, restarting...');
+        await startGHelperTask();
       }
     } catch {}
   }, 60000);
@@ -1876,6 +1896,10 @@ ipcMain.handle('install-ghelper-bridge', async () => {
     startGHelperTask();
   }
   return res;
+});
+
+ipcMain.handle('start-ghelper-bridge', async () => {
+  return await startGHelperTask();
 });
 
 ipcMain.handle('test-ghelper-hud', (_event, sampleText = 'Zone Test') => {

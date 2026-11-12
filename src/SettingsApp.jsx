@@ -385,12 +385,21 @@ export default function SettingsApp() {
   const installGHelperBridge = async () => {
     setGhelperBusy(true);
     setGhelperMessage('');
+    if (ghelperStatus.installed && !ghelperStatus.running) {
+      await window.twocode?.startGHelperBridge?.();
+      setTimeout(async () => {
+        const next = await window.twocode?.getGHelperBridgeStatus?.();
+        if (next) setGhelperStatus(next);
+        setGhelperBusy(false);
+      }, 1200);
+      return;
+    }
     const res = await window.twocode?.installGHelperBridge?.();
     if (res?.ok) {
       setGhelperStatus(res.status || { installed: true, running: true });
-      setGhelperMessage('G-Helper bridge task installed successfully.');
+      setGhelperMessage('G-Helper köprü görevi başarıyla kuruldu.');
     } else {
-      setGhelperMessage(res?.error || 'Could not install G-Helper bridge task.');
+      setGhelperMessage(res?.error || 'G-Helper köprü görevi kurulamadı.');
     }
     setGhelperBusy(false);
   };
@@ -2373,7 +2382,7 @@ export default function SettingsApp() {
                       G-Helper Bridge
                     </strong>
                     <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>
-                      {ghelperStatus.running ? 'Connected · OSD routed to Island' : ghelperStatus.installed ? 'Installed (Not running)' : 'Requires elevated task setup'}
+                      {ghelperStatus.running ? 'Bağlandı · OSD adaya yönlendirildi' : ghelperStatus.installed ? 'Kurulu (Çalışmıyor)' : 'Yetkili görev kurulumu gerekiyor'}
                     </span>
                   </div>
                   <button
@@ -2383,7 +2392,7 @@ export default function SettingsApp() {
                     onClick={installGHelperBridge}
                     disabled={ghelperBusy}
                   >
-                    {ghelperBusy ? 'Setting up…' : ghelperStatus.installed ? 'Reinstall' : 'Connect'}
+                    {ghelperBusy ? 'İşleniyor…' : ghelperStatus.running ? 'Yeniden Kur' : ghelperStatus.installed ? 'Başlat' : 'Bağla'}
                   </button>
                 </div>
                 {ghelperMessage && (

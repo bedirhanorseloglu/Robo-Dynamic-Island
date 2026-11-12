@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('twocode', {
   testAgentIntegration: (agent) => ipcRenderer.invoke('test-agent-integration', agent),
   getGHelperBridgeStatus: () => ipcRenderer.invoke('get-ghelper-bridge-status'),
   installGHelperBridge: () => ipcRenderer.invoke('install-ghelper-bridge'),
+  startGHelperBridge: () => ipcRenderer.invoke('start-ghelper-bridge'),
   testGHelperHud: (sampleText) => ipcRenderer.invoke('test-ghelper-hud', sampleText),
   getGHelperStatus: () => ipcRenderer.invoke('get-ghelper-status'),
   onGHelperStatusUpdate: (cb) => {

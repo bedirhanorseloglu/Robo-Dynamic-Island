@@ -159,7 +159,6 @@ public static class GHelperOsdBridge {
 
   static void OnWinEvent(IntPtr hook, uint eventType, IntPtr hwnd, int objectId, int childId, uint threadId, uint time) {
     try {
-      if (!TwoCodeActive) return;
       if (hwnd == IntPtr.Zero || objectId != 0) return;
       uint processId;
       GetWindowThreadProcessId(hwnd, out processId);
@@ -169,7 +168,13 @@ public static class GHelperOsdBridge {
       if (caption.ToString() != OsdCaption) return;
       int width, height;
       if (!IsToastGeometry(hwnd, out width, out height)) return;
+
+      // Always suppress G-Helper's black OSD window immediately,
+      // even if TwoCode is still starting up or reconnecting!
       Suppress(hwnd);
+
+      if (!TwoCodeActive) return;
+
       long now = Now();
       bool firstTime = !suppressedAt.ContainsKey(hwnd);
       suppressedAt[hwnd] = now;
@@ -235,18 +240,28 @@ try {
       $writer.AutoFlush = $true
       [GHelperOsdBridge]::TwoCodeActive = $true
       Log-Bridge "Connected to pipe $PipeName"
-      $writer.WriteLine(('{{"type":"hello","hook":{0},"pid":{1}}}' -f ([GHelperOsdBridge]::HookReady.ToString().ToLowerInvariant()), $PID))
+      try {
+        $writer.WriteLine(('{{"type":"hello","hook":{0},"pid":{1}}}' -f ([GHelperOsdBridge]::HookReady.ToString().ToLowerInvariant()), $PID))
+      } catch {}
 
       $lastPing = [DateTimeOffset]::UtcNow
       $message = $null
       while ($pipe.IsConnected) {
-        [GHelperOsdBridge]::Pump(40)
+        [GHelperOsdBridge]::Pump(30)
         while ([GHelperOsdBridge]::Messages.TryDequeue([ref]$message)) {
-          $writer.WriteLine($message)
+          try {
+            $writer.WriteLine($message)
+          } catch {
+            break
+          }
         }
-        if (([DateTimeOffset]::UtcNow - $lastPing).TotalSeconds -ge 5) {
+        if (([DateTimeOffset]::UtcNow - $lastPing).TotalSeconds -ge 4) {
           $lastPing = [DateTimeOffset]::UtcNow
-          $writer.WriteLine('{"type":"ping"}')
+          try {
+            $writer.WriteLine('{"type":"ping"}')
+          } catch {
+            break
+          }
         }
       }
       Log-Bridge "Pipe disconnected; retrying."
@@ -257,7 +272,9 @@ try {
       if ($writer) { try { $writer.Dispose() } catch {} }
       if ($pipe) { try { $pipe.Dispose() } catch {} }
     }
-    [GHelperOsdBridge]::Pump(250)
+    for ($i = 0; $i -lt 5; $i++) {
+      [GHelperOsdBridge]::Pump(100)
+    }
   }
 } catch {
   Log-Bridge "Fatal bridge exception: $($_.Exception.ToString())"
