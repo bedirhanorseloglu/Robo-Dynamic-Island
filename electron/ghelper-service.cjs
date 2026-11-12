@@ -180,6 +180,42 @@ class GHelperBridgeClient {
     this.lastAutoWakeAt = 0;
     this.lastAuraKeyAt = 0;
     this.lastPowerChangeAt = 0;
+    this.lastDispatchedModeId = null;
+    this.lastDispatchedModeAt = 0;
+  }
+
+  dispatchPerformanceModeToast(modeId, rawName = null) {
+    const modeNames = { 0: 'Dengeli', 1: 'Turbo', 2: 'Sessiz' };
+    const modeColors = { 0: '#38a6ff', 1: '#ff453a', 2: '#64d2ff' };
+    const modeIcons = { 0: 'car', 1: 'rocket', 2: 'bike' };
+
+    const validId = typeof modeId === 'number' && modeId >= 0 && modeId <= 2 ? modeId : 0;
+    const displayName = rawName || modeNames[validId] || 'Dengeli';
+    const now = Date.now();
+
+    // Debounce to prevent duplicate triggers (e.g. "Battery Performance Mode:" followed 50ms later by "Mode = 0 : OK")
+    if (this.lastDispatchedModeId === validId && now - (this.lastDispatchedModeAt || 0) < 2200) {
+      return;
+    }
+
+    this.currentMode = validId;
+    this.lastDispatchedModeId = validId;
+    this.lastDispatchedModeAt = now;
+    this.lastDispatchedToastAt = now;
+
+    if (typeof this.onToast === 'function') {
+      this.onToast({
+        raw: displayName,
+        label: 'Performans',
+        icon: 'mode',
+        valueText: displayName,
+        category: 'mode',
+        modeIndex: validId,
+        color: modeColors[validId] || '#38a6ff',
+        iconName: modeIcons[validId] || 'car',
+      });
+    }
+    this.checkConfigStatus();
   }
 
   intToHex(num) {
@@ -367,8 +403,8 @@ class GHelperBridgeClient {
   handleLogLine(line) {
     if (!line) return;
 
-    // Automatic AC / Battery power transition: Suppress background ACPI mode/aura/hardware re-apply HUDs!
-    if (/(?:Power source|AutoSetting|Power Mode StatusChange|Barrel Performance|Battery Performance)/i.test(line)) {
+    // Automatic AC / Battery power transition: Track power change timestamp
+    if (/(?:Power source|AutoSetting|Power Mode StatusChange)/i.test(line)) {
       this.lastPowerChangeAt = Date.now();
       this.checkConfigStatus();
       return;
@@ -386,23 +422,8 @@ class GHelperBridgeClient {
 
     // Instant hardware key reaction (G-Helper writes Key: XXX at 0ms before slow ACPI operations)
     if (/Key:\s*174\b/i.test(line)) {
-      this.currentMode = (this.currentMode + 1) % 3;
-      const modeNames = ['Dengeli', 'Turbo', 'Sessiz'];
-      const modeColors = ['#38a6ff', '#ff453a', '#64d2ff'];
-      const modeIcons = ['car', 'rocket', 'bike'];
-      const val = modeNames[this.currentMode];
-      this.lastDispatchedToastAt = Date.now();
-      this.onToast({
-        raw: val,
-        label: 'Performans',
-        icon: 'mode',
-        valueText: val,
-        category: 'mode',
-        modeIndex: this.currentMode,
-        color: modeColors[this.currentMode],
-        iconName: modeIcons[this.currentMode],
-      });
-      this.checkConfigStatus();
+      const nextMode = (this.currentMode + 1) % 3;
+      this.dispatchPerformanceModeToast(nextMode);
       return;
     }
 
@@ -616,67 +637,43 @@ class GHelperBridgeClient {
       return;
     }
 
-    // 3. Confirmed Performance Mode by index: e.g. "Hotkey mode: 0", "Mode = 0 : OK"
-    const hotkeyModeMatch = line.match(/(?:Hotkey mode|Mode\s*=)\s*:?\s*(\d+)/i);
-    if (hotkeyModeMatch) {
-      const modeId = parseInt(hotkeyModeMatch[1], 10);
-      this.currentMode = modeId;
-      this.checkConfigStatus();
-
-      // Suppress automated background mode re-apply when plugging or unplugging the charger
-      const isRecentPowerChange = Date.now() - (this.lastPowerChangeAt || 0) < 5000;
-      if (isRecentPowerChange) {
-        return;
-      }
-
-      const modeNames = { 0: 'Dengeli', 1: 'Turbo', 2: 'Sessiz' };
-      const modeColors = { 0: '#38a6ff', 1: '#ff453a', 2: '#64d2ff' };
-      const modeIcons = { 0: 'car', 1: 'rocket', 2: 'bike' };
-      const val = modeNames[modeId] || `Mod ${modeId}`;
-      this.lastDispatchedToastAt = Date.now();
-      this.onToast({
-        raw: val,
-        label: 'Performans',
-        icon: 'mode',
-        valueText: val,
-        category: 'mode',
-        modeIndex: modeId,
-        color: modeColors[modeId] || '#38a6ff',
-        iconName: modeIcons[modeId] || 'car',
-      });
+    // 3. Battery / Barrel Auto Profile Mode: e.g. "Battery Performance Mode: Dengeli", "Barrel Performance Mode: Turbo"
+    const profileModeMatch = line.match(/(?:Battery|Barrel)\s+Performance\s+Mode:\s*([^\r\n]+)/i);
+    if (profileModeMatch) {
+      const raw = profileModeMatch[1].trim();
+      const modeMap = {
+        Balanced: { id: 0, name: 'Dengeli' },
+        Dengeli: { id: 0, name: 'Dengeli' },
+        Silent: { id: 2, name: 'Sessiz' },
+        Sessiz: { id: 2, name: 'Sessiz' },
+        Turbo: { id: 1, name: 'Turbo' },
+      };
+      const found = modeMap[raw] || (/turbo/i.test(raw) ? { id: 1, name: 'Turbo' } : /sessiz|silent/i.test(raw) ? { id: 2, name: 'Sessiz' } : { id: 0, name: 'Dengeli' });
+      this.dispatchPerformanceModeToast(found.id, found.name);
       return;
     }
 
-    // 4. Confirmed Performance Mode by name: e.g. "Performance Mode: Balanced"
+    // 4. Confirmed Performance Mode by index: e.g. "Hotkey mode: 0", "Mode = 0 : OK"
+    const hotkeyModeMatch = line.match(/(?:Hotkey mode|Mode\s*=)\s*:?\s*(\d+)/i);
+    if (hotkeyModeMatch) {
+      const modeId = parseInt(hotkeyModeMatch[1], 10);
+      this.dispatchPerformanceModeToast(modeId);
+      return;
+    }
+
+    // 5. Confirmed Performance Mode by name: e.g. "Performance Mode: Balanced"
     const modeMatch = line.match(/Performance Mode:\s*([^\r\n]+)/i);
     if (modeMatch) {
       const rawMode = modeMatch[1].trim();
       const modeMap = {
-        Balanced: { name: 'Dengeli', id: 0, color: '#38a6ff', icon: 'car' },
-        Silent: { name: 'Sessiz', id: 2, color: '#64d2ff', icon: 'bike' },
-        Turbo: { name: 'Turbo', id: 1, color: '#ff453a', icon: 'rocket' },
+        Balanced: { name: 'Dengeli', id: 0 },
+        Dengeli: { name: 'Dengeli', id: 0 },
+        Silent: { name: 'Sessiz', id: 2 },
+        Sessiz: { name: 'Sessiz', id: 2 },
+        Turbo: { name: 'Turbo', id: 1 },
       };
-      const found = modeMap[rawMode] || { name: rawMode, id: 0, color: '#38a6ff', icon: 'car' };
-      this.currentMode = found.id;
-      this.checkConfigStatus();
-
-      // Suppress automated background mode re-apply when plugging or unplugging the charger
-      const isRecentPowerChange = Date.now() - (this.lastPowerChangeAt || 0) < 5000;
-      if (isRecentPowerChange) {
-        return;
-      }
-
-      this.lastDispatchedToastAt = Date.now();
-      this.onToast({
-        raw: found.name,
-        label: 'Performans',
-        icon: 'mode',
-        valueText: found.name,
-        category: 'mode',
-        modeIndex: found.id,
-        color: found.color,
-        iconName: found.icon,
-      });
+      const found = modeMap[rawMode] || (/turbo/i.test(rawMode) ? { id: 1, name: 'Turbo' } : /sessiz|silent/i.test(rawMode) ? { id: 2, name: 'Sessiz' } : { id: 0, name: 'Dengeli' });
+      this.dispatchPerformanceModeToast(found.id, found.name);
       return;
     }
 
