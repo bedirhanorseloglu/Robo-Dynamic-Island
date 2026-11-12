@@ -1959,6 +1959,9 @@ export default function App() {
         if (typeof hud.muted === 'boolean') setIsMuted(hud.muted);
       }
       if (hud.type === 'ghelper') {
+        if (hud.ghelper?.category === 'fnlock') {
+          return;
+        }
         if (hud.ghelper?.category === 'mode' && typeof hud.ghelper.modeIndex === 'number') {
           setGhelperStatus((prev) => ({
             ...prev,

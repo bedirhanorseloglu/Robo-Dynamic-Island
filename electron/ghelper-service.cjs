@@ -47,6 +47,11 @@ function resolveGHelperToast(text) {
     else if (/aura|zone|rainbow|gradient|ambient|breathe|heatmap|color|renk|gökkuşağı|gradyan|ortam/i.test(raw)) category = 'aura';
   }
 
+  // Never show Fn Lock HUD on island
+  if (category === 'fnlock') {
+    return null;
+  }
+
   const categoryLabels = {
     backlight: 'Klavye Işığı',
     aura: 'Laptop Klavyesi',
@@ -174,6 +179,7 @@ class GHelperBridgeClient {
     this.lastBacklightAt = 0;
     this.lastAutoWakeAt = 0;
     this.lastAuraKeyAt = 0;
+    this.lastPowerChangeAt = 0;
   }
 
   intToHex(num) {
@@ -361,6 +367,18 @@ class GHelperBridgeClient {
   handleLogLine(line) {
     if (!line) return;
 
+    // Automatic AC / Battery power transition: Suppress background ACPI mode/aura/hardware re-apply HUDs!
+    if (/(?:Power source|AutoSetting|Power Mode StatusChange|Barrel Performance|Battery Performance)/i.test(line)) {
+      this.lastPowerChangeAt = Date.now();
+      this.checkConfigStatus();
+      return;
+    }
+
+    // Suppress any Fn Lock notifications completely
+    if (/FnLock/i.test(line)) {
+      return;
+    }
+
     // Track explicit Aura key press
     if (/Key:\s*179\b/i.test(line)) {
       this.lastAuraKeyAt = Date.now();
@@ -489,12 +507,13 @@ class GHelperBridgeClient {
     // Aura Mode / Klavye Rengi: e.g. "AuraMode: AuraStatic", "AuraMode: ZONETEST"
     const auraMatch = line.match(/AuraMode:\s*([^\r\n]+)/i);
     if (auraMatch) {
-      // G-Helper internally re-applies AuraMode whenever keyboard backlight changes or auto-wakes!
-      // Suppress this false-positive if a backlight change or auto-wake happened recently and no explicit Aura key was pressed.
+      // G-Helper internally re-applies AuraMode whenever keyboard backlight changes, auto-wakes, or power source changes!
+      // Suppress this false-positive if a backlight change, auto-wake, or power transition happened recently and no explicit Aura key was pressed.
       const isRecentBacklight = Date.now() - this.lastBacklightAt < 2500;
       const isRecentAutoWake = Date.now() - this.lastAutoWakeAt < 4000;
+      const isRecentPowerChange = Date.now() - (this.lastPowerChangeAt || 0) < 5000;
       const isExplicitAuraKey = Date.now() - this.lastAuraKeyAt < 1500;
-      if ((isRecentBacklight || isRecentAutoWake) && !isExplicitAuraKey) {
+      if ((isRecentBacklight || isRecentAutoWake || isRecentPowerChange) && !isExplicitAuraKey) {
         return;
       }
 
@@ -602,6 +621,14 @@ class GHelperBridgeClient {
     if (hotkeyModeMatch) {
       const modeId = parseInt(hotkeyModeMatch[1], 10);
       this.currentMode = modeId;
+      this.checkConfigStatus();
+
+      // Suppress automated background mode re-apply when plugging or unplugging the charger
+      const isRecentPowerChange = Date.now() - (this.lastPowerChangeAt || 0) < 5000;
+      if (isRecentPowerChange) {
+        return;
+      }
+
       const modeNames = { 0: 'Dengeli', 1: 'Turbo', 2: 'Sessiz' };
       const modeColors = { 0: '#38a6ff', 1: '#ff453a', 2: '#64d2ff' };
       const modeIcons = { 0: 'car', 1: 'rocket', 2: 'bike' };
@@ -617,7 +644,6 @@ class GHelperBridgeClient {
         color: modeColors[modeId] || '#38a6ff',
         iconName: modeIcons[modeId] || 'car',
       });
-      this.checkConfigStatus();
       return;
     }
 
@@ -632,6 +658,14 @@ class GHelperBridgeClient {
       };
       const found = modeMap[rawMode] || { name: rawMode, id: 0, color: '#38a6ff', icon: 'car' };
       this.currentMode = found.id;
+      this.checkConfigStatus();
+
+      // Suppress automated background mode re-apply when plugging or unplugging the charger
+      const isRecentPowerChange = Date.now() - (this.lastPowerChangeAt || 0) < 5000;
+      if (isRecentPowerChange) {
+        return;
+      }
+
       this.lastDispatchedToastAt = Date.now();
       this.onToast({
         raw: found.name,
@@ -643,7 +677,6 @@ class GHelperBridgeClient {
         color: found.color,
         iconName: found.icon,
       });
-      this.checkConfigStatus();
       return;
     }
 
@@ -664,20 +697,8 @@ class GHelperBridgeClient {
       return;
     }
 
-    // 6. Fn Lock: e.g. "FnLock: 1"
-    const fnMatch = line.match(/FnLock[^:]*:\s*(True|False|\d+)/i);
-    if (fnMatch) {
-      const raw = fnMatch[1].toLowerCase();
-      const enabled = raw === '1' || raw === 'true';
-      const val = enabled ? 'Açık' : 'Kapalı';
-      this.lastDispatchedToastAt = Date.now();
-      this.onToast({
-        raw: val,
-        label: 'Fn Kilidi',
-        icon: 'lock',
-        valueText: val,
-        category: 'fnlock',
-      });
+    // 6. Fn Lock: completely suppressed (user explicitly requested no fn lock HUD)
+    if (/FnLock/i.test(line)) {
       return;
     }
   }
