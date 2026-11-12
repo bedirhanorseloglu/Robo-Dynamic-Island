@@ -2710,13 +2710,14 @@ export default function App() {
 
         {/* ============================================================
             COLLAPSED LAYER 2C: WINDOWS SYSTEM NOTIFICATION BANNER NOTCH
-            Renders the app's own logo & brand/dominant ambient color
+            Sleek, modern, uncluttered Dynamic Island notification
             ============================================================ */}
         <div
           className={`morph-layer layer-notif-toast ${islandMode === 'notif-toast' ? 'is-visible' : ''} ${notifPresentation.kind === 'audio' || notifPresentation.kind === 'video' ? 'is-call-notification' : ''}`}
           role="button"
           tabIndex={0}
           title="Uygulamayı aç"
+          style={{ '--notif-stay-ms': `${notifRemainingMsRef.current || 4500}ms` }}
           onMouseEnter={() => {
             if (!isShowingNotifToastRef.current || !notifTimerRef.current) return;
             clearTimeout(notifTimerRef.current);
@@ -2741,11 +2742,39 @@ export default function App() {
           onClick={() => openNotification(toastBanner)}
           onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') openNotification(toastBanner); }}
         >
-          <NotificationAvatar banner={toastBanner} brand={notifBrand.brand} presentation={notifPresentation} />
-          <div className="notif-toast-content">
-            <small className="notif-toast-app-name">{notifPresentation.app}</small>
-            <strong><NotificationText text={notifPresentation.title} /></strong>
-            <span><NotificationText text={notifPresentation.subtitle || notifPresentation.app} /></span>
+          <div className="notif-toast-ambient" aria-hidden="true" />
+          <div className="notif-toast-hero">
+            <NotificationAvatar banner={toastBanner} brand={notifBrand.brand} presentation={notifPresentation} />
+          </div>
+          <div className="notif-toast-main">
+            <div className="notif-toast-top-row">
+              <span className="notif-toast-badge">
+                <span className="notif-toast-badge-dot" />
+                <span className="notif-toast-badge-app">{notifPresentation.app}</span>
+              </span>
+              <span className="notif-toast-meta">
+                <span className="notif-toast-time">şimdi</span>
+                <span className="notif-toast-arrow" aria-hidden="true">↗</span>
+              </span>
+            </div>
+            <div className="notif-toast-message-row">
+              <span className="notif-toast-headline">
+                <NotificationText text={notifPresentation.title} />
+              </span>
+              {Boolean(
+                notifPresentation.subtitle &&
+                notifPresentation.subtitle.trim() &&
+                notifPresentation.subtitle !== notifPresentation.title &&
+                notifPresentation.subtitle !== notifPresentation.app
+              ) && (
+                <span className="notif-toast-body">
+                  <NotificationText text={notifPresentation.subtitle} />
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="notif-toast-countdown-track" aria-hidden="true">
+            <div className="notif-toast-countdown-bar" />
           </div>
         </div>
 

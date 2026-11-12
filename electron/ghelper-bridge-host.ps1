@@ -218,39 +218,52 @@ public static class GHelperOsdBridge {
 
 Log-Bridge "C# compiled. Connecting to pipe $PipeName..."
 
-$pipe = $null
-$writer = $null
 try {
-  $pipe = New-Object System.IO.Pipes.NamedPipeClientStream('.', $PipeName, [System.IO.Pipes.PipeDirection]::Out)
-  $pipe.Connect(5000)
-  $writer = New-Object System.IO.StreamWriter($pipe, (New-Object System.Text.UTF8Encoding($false)))
-  $writer.AutoFlush = $true
-
+  # Keep the elevated window hook alive even if TwoCode has not opened its
+  # named pipe yet (common when both apps start at Windows logon).
   [GHelperOsdBridge]::Start()
-  [GHelperOsdBridge]::TwoCodeActive = $true
-  Log-Bridge "Bridge started. HookReady=$([GHelperOsdBridge]::HookReady)"
-  $writer.WriteLine(('{{"type":"hello","hook":{0},"pid":{1}}}' -f ([GHelperOsdBridge]::HookReady.ToString().ToLowerInvariant()), $PID))
+  [GHelperOsdBridge]::TwoCodeActive = $false
+  Log-Bridge "OSD hook started. HookReady=$([GHelperOsdBridge]::HookReady)"
 
-  $lastPing = [DateTimeOffset]::UtcNow
-  $message = $null
-  while ($pipe.IsConnected) {
-    [GHelperOsdBridge]::Pump(40)
-    while ([GHelperOsdBridge]::Messages.TryDequeue([ref]$message)) {
-      Log-Bridge "Sending message: $message"
-      $writer.WriteLine($message)
-    }
-    if (([DateTimeOffset]::UtcNow - $lastPing).TotalSeconds -ge 5) {
+  while ($true) {
+    $pipe = $null
+    $writer = $null
+    try {
+      $pipe = New-Object System.IO.Pipes.NamedPipeClientStream('.', $PipeName, [System.IO.Pipes.PipeDirection]::Out)
+      $pipe.Connect(1000)
+      $writer = New-Object System.IO.StreamWriter($pipe, (New-Object System.Text.UTF8Encoding($false)))
+      $writer.AutoFlush = $true
+      [GHelperOsdBridge]::TwoCodeActive = $true
+      Log-Bridge "Connected to pipe $PipeName"
+      $writer.WriteLine(('{{"type":"hello","hook":{0},"pid":{1}}}' -f ([GHelperOsdBridge]::HookReady.ToString().ToLowerInvariant()), $PID))
+
       $lastPing = [DateTimeOffset]::UtcNow
-      $writer.WriteLine('{"type":"ping"}')
+      $message = $null
+      while ($pipe.IsConnected) {
+        [GHelperOsdBridge]::Pump(40)
+        while ([GHelperOsdBridge]::Messages.TryDequeue([ref]$message)) {
+          $writer.WriteLine($message)
+        }
+        if (([DateTimeOffset]::UtcNow - $lastPing).TotalSeconds -ge 5) {
+          $lastPing = [DateTimeOffset]::UtcNow
+          $writer.WriteLine('{"type":"ping"}')
+        }
+      }
+      Log-Bridge "Pipe disconnected; retrying."
+    } catch {
+      Log-Bridge "Pipe unavailable; retrying: $($_.Exception.Message)"
+    } finally {
+      [GHelperOsdBridge]::TwoCodeActive = $false
+      if ($writer) { try { $writer.Dispose() } catch {} }
+      if ($pipe) { try { $pipe.Dispose() } catch {} }
     }
+    [GHelperOsdBridge]::Pump(250)
   }
 } catch {
-  Log-Bridge "Exception in loop: $($_.Exception.ToString())"
+  Log-Bridge "Fatal bridge exception: $($_.Exception.ToString())"
 } finally {
   [GHelperOsdBridge]::TwoCodeActive = $false
   Log-Bridge "Stopping bridge..."
   [GHelperOsdBridge]::Stop()
-  if ($writer) { try { $writer.Dispose() } catch {} }
-  if ($pipe) { try { $pipe.Dispose() } catch {} }
   if ($ownsMutex) { try { $mutex.ReleaseMutex() } catch {} }
 }
