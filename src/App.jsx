@@ -325,6 +325,24 @@ function isSafeNotificationImage(src) {
   );
 }
 
+function formatNotifTime(timestamp) {
+  if (!timestamp) return 'şimdi';
+  const now = Date.now();
+  const time = typeof timestamp === 'number' ? timestamp : new Date(timestamp).getTime();
+  if (isNaN(time)) return 'şimdi';
+  const diffSec = Math.max(0, Math.floor((now - time) / 1000));
+  if (diffSec < 45) return 'şimdi';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} dk`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours} sa`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'dün';
+  if (diffDays < 7) return `${diffDays} gün`;
+  const d = new Date(time);
+  return `${d.getDate()} ${['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'][d.getMonth()]}`;
+}
+
 function NotificationAvatar({ banner, brand, presentation }) {
   const profileImage = isSafeNotificationImage(banner?.profileImage) ? banner.profileImage : '';
   const initials = presentation.sender
@@ -3280,41 +3298,129 @@ export default function App() {
           </header>
 
           {notificationHistoryOpen && (
-              <section ref={notificationHistoryPanelRef} id="notification-history-panel" className="notification-history-panel" aria-label="Bildirim geçmişi" style={(() => { const newest = notificationHistory[0]; const accent = resolveNotifBrand(newest, newest?.logoAccent); return { '--notif-panel-rgb': accent.rgb, '--notif-panel-hex': accent.hex }; })()} onClick={(event) => event.stopPropagation()}>
+              <section
+                ref={notificationHistoryPanelRef}
+                id="notification-history-panel"
+                className="notification-history-panel"
+                aria-label="Bildirim geçmişi"
+                style={(() => {
+                  const newest = notificationHistory[0];
+                  const accent = resolveNotifBrand(newest, newest?.logoAccent);
+                  return { '--notif-panel-rgb': accent.rgb, '--notif-panel-hex': accent.hex };
+                })()}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="notif-panel-ambient-glow" aria-hidden="true" />
+
                 <header className="notification-history-header">
                   <div className="notification-history-heading">
-                    <span className="notification-history-icon"><Bell size={15} /></span>
-                    <div><strong>Bildirim geçmişi</strong><span><span className="clock-number-text">{notificationHistory.length}</span> kayıt</span></div>
+                    <span className="notification-history-icon"><Bell size={13} strokeWidth={2.2} /></span>
+                    <strong className="notification-history-title">Bildirimler</strong>
+                    {notificationHistory.length > 0 && (
+                      <span className="notif-history-badge">
+                        {unreadNotificationCount > 0 ? `${unreadNotificationCount} yeni` : `${notificationHistory.length}`}
+                      </span>
+                    )}
                   </div>
                   <div className="notification-history-actions">
-                    <button className="notification-history-clear" type="button" onClick={() => setNotificationHistory([])} disabled={!notificationHistory.length}>Tümünü sil</button>
-                    <button className="notification-history-close" type="button" aria-label="Kapat" title="Kapat" onClick={() => setNotificationHistoryOpen(false)}><X size={16} /></button>
+                    {notificationHistory.length > 0 && (
+                      <button
+                        className="notification-history-clear"
+                        type="button"
+                        onClick={() => setNotificationHistory([])}
+                        title="Tüm bildirimleri temizle"
+                      >
+                        Temizle
+                      </button>
+                    )}
+                    <button
+                      className="notification-history-close"
+                      type="button"
+                      aria-label="Kapat"
+                      title="Kapat"
+                      onClick={() => setNotificationHistoryOpen(false)}
+                    >
+                      <X size={14} strokeWidth={2.2} />
+                    </button>
                   </div>
                 </header>
+
                 <div className="notification-history-list">
-                  {notificationHistory.length ? notificationHistory.map((item) => (
+                  {notificationHistory.length ? notificationHistory.map((item, index) => (
                     <div
-                      className={`notification-history-item ${item.isRead ? '' : 'is-unread'}`}
+                      className={`notif-card ${item.isRead ? 'is-read' : 'is-unread'}`}
                       key={item.id}
                       style={(() => {
                         const accent = resolveNotifBrand(item, item.logoAccent);
-                        return { '--notif-accent-rgb': accent.rgb, '--notif-accent-hex': accent.hex };
+                        return {
+                          '--notif-accent-rgb': accent.rgb,
+                          '--notif-accent-hex': accent.hex,
+                          '--card-delay': `${Math.min(index * 35, 240)}ms`,
+                        };
                       })()}
                     >
-                      {!item.isRead && <span className="notification-unread-indicator" aria-label="Okunmadı" />}
-                      <button type="button" className="notification-history-open" onClick={() => openNotification(item)} aria-label={`${item.app || 'Uygulama'} bildirimini aç`}>
-                        <NotificationAvatar banner={item} brand={resolveNotifBrand(item).brand} presentation={resolveNotificationPresentation(item)} />
-                        <span className="notification-history-copy"><strong><NotificationText text={item.title || item.app} /></strong><span><NotificationText text={item.body || item.app} /></span><small>{item.app} · <time className="clock-number-text">{new Date(item.timestamp).toLocaleString('tr-TR')}</time></small></span>
+                      <button
+                        type="button"
+                        className="notif-card-main"
+                        onClick={() => openNotification(item)}
+                        aria-label={`${item.app || 'Uygulama'} bildirimini aç`}
+                      >
+                        <div className="notif-card-avatar">
+                          <NotificationAvatar
+                            banner={item}
+                            brand={resolveNotifBrand(item).brand}
+                            presentation={resolveNotificationPresentation(item)}
+                          />
+                          {!item.isRead && <span className="notif-card-unread-dot" aria-label="Okunmadı" />}
+                        </div>
+
+                        <div className="notif-card-content">
+                          <div className="notif-card-top-row">
+                            <span className="notif-card-badge">
+                              <span className="notif-card-badge-dot" />
+                              <span className="notif-card-badge-app">{item.app || 'Sistem'}</span>
+                            </span>
+                            <span className="notif-card-time">{formatNotifTime(item.timestamp)}</span>
+                          </div>
+
+                          <div className="notif-card-message-row">
+                            <span className="notif-card-headline">
+                              <NotificationText text={item.title || item.app} />
+                            </span>
+                            {Boolean(
+                              item.body &&
+                              item.body.trim() &&
+                              item.body !== item.title &&
+                              item.body !== item.app
+                            ) && (
+                              <span className="notif-card-body">
+                                <NotificationText text={item.body} />
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </button>
-                      <button type="button" className="notification-history-delete" aria-label="Bildirimi sil" title="Bildirimi sil" onClick={() => setNotificationHistory((items) => items.filter((entry) => entry.id !== item.id))}>
-                        <Trash2 size={15} />
+
+                      <button
+                        type="button"
+                        className="notif-card-delete"
+                        aria-label="Bildirimi sil"
+                        title="Bildirimi sil"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNotificationHistory((items) => items.filter((entry) => entry.id !== item.id));
+                        }}
+                      >
+                        <Trash2 size={13} strokeWidth={2} />
                       </button>
                     </div>
                   )) : (
                     <div className="notification-history-empty">
-                      <span className="notification-empty-icon"><Bell size={19} /></span>
-                      <strong>Şimdilik sessiz</strong>
-                      <span>Yeni bildirimlerin burada görünecek.</span>
+                      <div className="notification-empty-icon">
+                        <Bell size={20} strokeWidth={2} />
+                      </div>
+                      <strong className="notification-empty-title">Bildirim Yok</strong>
+                      <span className="notification-empty-desc">Yeni bildirimler geldiğinde burada toplanır.</span>
                     </div>
                   )}
                 </div>
