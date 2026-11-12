@@ -2769,14 +2769,10 @@ export default function App() {
           </div>
           <div className="notif-toast-main">
             <div className="notif-toast-top-row">
-              <span className="notif-toast-badge">
-                <span className="notif-toast-badge-dot" />
-                <span className="notif-toast-badge-app">{notifPresentation.app}</span>
-              </span>
-              <span className="notif-toast-meta">
-                <span className="notif-toast-time">şimdi</span>
-                <span className="notif-toast-arrow" aria-hidden="true">↗</span>
-              </span>
+              <span className="notif-toast-app-label">{notifPresentation.app}</span>
+              <span className="notif-toast-sep" aria-hidden="true">·</span>
+              <span className="notif-toast-time">şimdi</span>
+              <span className="notif-toast-arrow" aria-hidden="true">↗</span>
             </div>
             <div className="notif-toast-message-row">
               <span className="notif-toast-headline">
@@ -3374,15 +3370,12 @@ export default function App() {
                             brand={resolveNotifBrand(item).brand}
                             presentation={resolveNotificationPresentation(item)}
                           />
-                          {!item.isRead && <span className="notif-card-unread-dot" aria-label="Okunmadı" />}
                         </div>
 
                         <div className="notif-card-content">
                           <div className="notif-card-top-row">
-                            <span className="notif-card-badge">
-                              <span className="notif-card-badge-dot" />
-                              <span className="notif-card-badge-app">{item.app || 'Sistem'}</span>
-                            </span>
+                            <span className="notif-card-app-label">{item.app || 'Sistem'}</span>
+                            <span className="notif-card-sep" aria-hidden="true">·</span>
                             <span className="notif-card-time">{formatNotifTime(item.timestamp)}</span>
                           </div>
 

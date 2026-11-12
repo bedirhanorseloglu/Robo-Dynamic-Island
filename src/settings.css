@@ -1637,6 +1637,199 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* G-Helper Bridge 21st.dev / Raycast Minimal Obsidian Card */
+.gh-bridge-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 11px 12px;
+  background: 
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.015) 100%),
+    rgba(14, 15, 20, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 10px 24px -6px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  margin-top: 2px;
+  margin-bottom: 6px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gh-bridge-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 12px 28px -6px rgba(0, 0, 0, 0.55);
+}
+
+.gh-bridge-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.gh-bridge-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5px;
+  min-width: 0;
+}
+
+.gh-bridge-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.gh-bridge-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f5f6f8;
+  letter-spacing: -0.01em;
+}
+
+.gh-bridge-status-pill {
+  font-size: 8.5px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 1.5px 6.5px;
+  border-radius: 999px;
+  font-family: var(--font-family-mono, ui-monospace, SFMono-Regular, monospace);
+  line-height: 1.2;
+}
+
+.gh-bridge-status-pill.is-active {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f4f5f8;
+}
+
+.gh-bridge-status-pill.is-idle {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  color: #fbbf24;
+}
+
+.gh-bridge-status-pill.is-action {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  color: #f87171;
+}
+
+.gh-bridge-subtitle {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.42);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gh-bridge-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 11px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  color: #f4f5f8;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gh-bridge-action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  transform: translateY(-0.5px);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.gh-bridge-action-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.gh-bridge-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.gh-bridge-alert {
+  font-size: 10.5px;
+  line-height: 1.35;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.gh-bridge-alert.is-ok {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.gh-bridge-alert.is-err {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.gh-bridge-tests-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.gh-bridge-tests-label {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.32);
+  margin-right: 2px;
+}
+
+.gh-bridge-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3.5px 8.5px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.gh-bridge-chip:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-0.5px);
+}
+
+.gh-bridge-chip:active {
+  transform: translateY(0);
+}
+
 .notif-toggle-line {
   display: flex;
   align-items: center;

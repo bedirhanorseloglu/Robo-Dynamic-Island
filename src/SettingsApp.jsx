@@ -2373,22 +2373,23 @@ export default function SettingsApp() {
                 </div>
               </div>
 
-              {/* G-Helper Bridge Section */}
-              <div className="notif-top-toggles ghelper-settings-card">
-                <div className="notif-toggle-line">
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: ghelperStatus.running ? '#10B981' : ghelperStatus.installed ? '#F59E0B' : '#EF4444' }} />
-                      G-Helper Bridge
-                    </strong>
-                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>
-                      {ghelperStatus.running ? 'Bağlandı · OSD adaya yönlendirildi' : ghelperStatus.installed ? 'Kurulu (Çalışmıyor)' : 'Yetkili görev kurulumu gerekiyor'}
+              {/* G-Helper Bridge Section (21st.dev / Minimal Obsidian Card) */}
+              <div className="gh-bridge-card">
+                <div className="gh-bridge-header">
+                  <div className="gh-bridge-meta">
+                    <div className="gh-bridge-title-row">
+                      <span className="gh-bridge-title">G-Helper Bridge</span>
+                      <span className={`gh-bridge-status-pill ${ghelperStatus.running ? 'is-active' : ghelperStatus.installed ? 'is-idle' : 'is-action'}`}>
+                        {ghelperStatus.running ? 'BAĞLI' : ghelperStatus.installed ? 'BEKLEMEDE' : 'KURULUM'}
+                      </span>
+                    </div>
+                    <span className="gh-bridge-subtitle">
+                      {ghelperStatus.running ? 'OSD adaya yönlendirildi' : ghelperStatus.installed ? 'Kurulu (Çalışmıyor)' : 'Yetkili görev kurulumu gerekiyor'}
                     </span>
                   </div>
                   <button
                     type="button"
-                    className="agent-connect-button"
-                    style={{ padding: '4px 10px', fontSize: '11px', height: 'auto' }}
+                    className="gh-bridge-action-btn"
                     onClick={installGHelperBridge}
                     disabled={ghelperBusy}
                   >
@@ -2396,34 +2397,32 @@ export default function SettingsApp() {
                   </button>
                 </div>
                 {ghelperMessage && (
-                  <div style={{ fontSize: '11px', color: ghelperMessage.includes('Could not') ? '#F87171' : '#34D399', marginTop: '4px' }}>
+                  <div className={`gh-bridge-alert ${ghelperMessage.includes('Could not') ? 'is-err' : 'is-ok'}`}>
                     {ghelperMessage}
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                <div className="gh-bridge-tests-row">
+                  <span className="gh-bridge-tests-label">TEST</span>
                   <button
                     type="button"
-                    className="settings-subtab-btn"
-                    style={{ fontSize: '10.5px', padding: '3px 8px' }}
+                    className="gh-bridge-chip"
                     onClick={() => testGHelperHud('Yüksek')}
                   >
-                    Test Klavye
+                    Klavye
                   </button>
                   <button
                     type="button"
-                    className="settings-subtab-btn"
-                    style={{ fontSize: '10.5px', padding: '3px 8px' }}
+                    className="gh-bridge-chip"
                     onClick={() => testGHelperHud('Ses açık')}
                   >
-                    Test Mic
+                    Mic
                   </button>
                   <button
                     type="button"
-                    className="settings-subtab-btn"
-                    style={{ fontSize: '10.5px', padding: '3px 8px' }}
+                    className="gh-bridge-chip"
                     onClick={() => testGHelperHud('Zone Test')}
                   >
-                    Test Aura
+                    Aura
                   </button>
                 </div>
               </div>
