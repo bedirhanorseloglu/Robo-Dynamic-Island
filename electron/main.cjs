@@ -29,6 +29,9 @@ const {
   resolveGHelperToast,
   readGHelperStatus,
 } = require('./ghelper-service.cjs');
+const { createLiveActivityWatcher } = require('./live-activity-watcher.cjs');
+const { createPerfMonitor } = require('./perf-monitor.cjs');
+const perfMonitor = createPerfMonitor();
 
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=96 --optimize-for-size');
@@ -43,6 +46,10 @@ app.commandLine.appendSwitch('disable-print-preview');
 app.commandLine.appendSwitch('disable-speech-api');
 app.commandLine.appendSwitch('disable-speech-synthesis-api');
 app.commandLine.appendSwitch('disable-extensions');
+app.commandLine.appendSwitch('num-raster-threads', '1');
+app.commandLine.appendSwitch('disk-cache-size', '10485760');
+app.commandLine.appendSwitch('media-cache-size', '10485760');
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 app.commandLine.appendSwitch('enable-features', 'TrimOnMemoryPressure');
 app.commandLine.appendSwitch(
   'disable-features',
@@ -77,7 +84,7 @@ const MODE_DIMENSIONS = {
   'mini-progress': { bodyWidth: 268, height: 12, earRadius: 7, bottomRadius: 6, droplet: 0 },
   hud: { bodyWidth: 312, height: 36, earRadius: 0, bottomRadius: 18, droplet: 0 },
   battery: { bodyWidth: 356, height: 58, earRadius: 14, bottomRadius: 24, droplet: 0 },
-  'notif-toast': { bodyWidth: 384, height: 60, earRadius: 14, bottomRadius: 24, droplet: 0 },
+  'notif-toast': { bodyWidth: 396, height: 60, earRadius: 0, bottomRadius: 24, droplet: 0 },
   'music-bar': { bodyWidth: 350, height: 26, earRadius: 9, bottomRadius: 13, droplet: 0 },
   'focus-bar': { bodyWidth: 110, height: 26, earRadius: 8, bottomRadius: 13, droplet: 0 },
   'focus-bar-media': { bodyWidth: 104, height: 26, earRadius: 8, bottomRadius: 13, droplet: 1 },
@@ -1575,6 +1582,18 @@ function createWindow() {
   mainWindow.setAlwaysOnTop(true, 'screen-saver');
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
+  const ensureIslandOnTop = () => {
+    if (!mainWindow || mainWindow.isDestroyed() || gameModeActive) return;
+    try {
+      mainWindow.setAlwaysOnTop(true, 'screen-saver');
+      mainWindow.moveTop();
+    } catch {}
+  };
+
+  mainWindow.on('blur', () => {
+    setTimeout(ensureIslandOnTop, 60);
+  });
+
   mainWindow.webContents.on('did-finish-load', () => {
     mainWindow.setSkipTaskbar(true);
     mainWindow.showInactive();
@@ -1707,7 +1726,11 @@ function setGameModeActive(active) {
   }
 
   startBackgroundPolling();
-  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('game-mode-change', false);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    mainWindow.moveTop();
+    mainWindow.webContents.send('game-mode-change', false);
+  }
   if (gameModeSettingsWasVisible && settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.showInactive();
   gameModeSettingsWasVisible = false;
 }
@@ -1733,6 +1756,21 @@ function startSystemWatcher() {
           const ev = JSON.parse(trimmed);
           if (ev.event === 'game-mode') {
             setGameModeActive(ev.active);
+            continue;
+          }
+          if (ev.event === 'app-context') {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              if (!gameModeActive) {
+                try {
+                  mainWindow.setAlwaysOnTop(true, 'screen-saver');
+                  mainWindow.moveTop();
+                } catch {}
+              }
+              mainWindow.webContents.send('app-context', {
+                app: ev.app || '',
+                category: ev.category || 'desktop',
+              });
+            }
             continue;
           }
           if (ev.event === 'ghelper-notification') {
@@ -1780,6 +1818,8 @@ function startSystemWatcher() {
                 isInit: false,
               });
             }
+          } else if (ev.event === 'media-changed') {
+            scheduleNextMediaPoll(40);
           } else if (ev.event === 'notification') {
             const isEmail = /gmail|outlook|mail|posta/i.test(`${ev.app || ''} ${ev.appId || ''} ${ev.title || ''}`);
             if (isEmail && localGoogleState.connected) {
@@ -1817,8 +1857,32 @@ function startSystemWatcher() {
   } catch {}
 }
 
+let liveActivityWatcher = null;
+
+function startLiveActivityWatchers() {
+  if (liveActivityWatcher) return;
+  liveActivityWatcher = createLiveActivityWatcher({
+    downloadsDir: app.getPath('downloads'),
+    onUpdate: (payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('live-activity', payload);
+      }
+    },
+  });
+  liveActivityWatcher.start();
+}
+
+function stopLiveActivityWatchers() {
+  if (liveActivityWatcher) {
+    liveActivityWatcher.stop();
+    liveActivityWatcher = null;
+  }
+}
+
 app.on('will-quit', () => {
   stopBackgroundPolling();
+  stopLiveActivityWatchers();
+  perfMonitor.stop();
   stopLocalAgentServers();
   if (ghelperBridgeClient) {
     try { ghelperBridgeClient.stop(); } catch {}
@@ -1842,6 +1906,7 @@ app.whenReady().then(() => {
   if (agentStatus.codexConnected || agentStatus.antigravityConnected) startLocalAgentServers();
   startCursorHoverWatcher();
   startSystemWatcher();
+  startLiveActivityWatchers();
 
   // Start elevated GHelper bridge pipe listener
   try {
@@ -2197,15 +2262,7 @@ ipcMain.handle('open-app', async (_event, target = {}) => {
 });
 
 ipcMain.handle('open-notification-target', async (_event, target = {}) => {
-  let loweredOverlay = false;
   try {
-    // Let the launched app/browser take the foreground instead of being covered by the island.
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (notificationTargetFocusTimer) clearTimeout(notificationTargetFocusTimer);
-      mainWindow.setAlwaysOnTop(false);
-      loweredOverlay = true;
-    }
-
     if (typeof target.url === 'string' && target.url) {
       const parsed = new URL(target.url);
       if (!['https:', 'http:'].includes(parsed.protocol)) return false;
@@ -2220,13 +2277,13 @@ ipcMain.handle('open-notification-target', async (_event, target = {}) => {
   } catch (error) {
     console.warn('Could not open notification target:', error.message);
   } finally {
-    if (loweredOverlay) {
-      notificationTargetFocusTimer = setTimeout(() => {
-        notificationTargetFocusTimer = null;
-        if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow && !mainWindow.isDestroyed() && !gameModeActive) {
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed() && !gameModeActive) {
           mainWindow.setAlwaysOnTop(true, 'screen-saver');
+          mainWindow.moveTop();
         }
-      }, 2500);
+      }, 250);
     }
   }
   return false;
@@ -2254,6 +2311,19 @@ ipcMain.handle('get-system-stats', async () => {
     uptimeSeconds: Math.floor(os.uptime()),
     jobsToday: localAgentHistory.jobsToday,
   };
+});
+
+ipcMain.handle('get-perf-metrics', async () => perfMonitor.getSnapshot());
+
+ipcMain.handle('open-taskmgr-perf', async (_event, section = 'cpu') => {
+  const scriptPath = path.join(__dirname, 'open-taskmgr-perf.ps1');
+  execFile(
+    'powershell.exe',
+    ['-WindowStyle', 'Hidden', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-Section', String(section || 'cpu')],
+    { windowsHide: true, timeout: 8000 },
+    () => {}
+  );
+  return true;
 });
 
 ipcMain.handle('resolve-agent-approval', (_event, { id, approved }) => {

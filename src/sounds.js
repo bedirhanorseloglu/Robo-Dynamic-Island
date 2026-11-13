@@ -1,6 +1,18 @@
 // Web Audio API Synthesizer for TwoCode Robo Voices, Emotions & Notification Sounds
 
 let audioCtx = null;
+let audioCloseTimer = null;
+
+function scheduleAudioClose() {
+  clearTimeout(audioCloseTimer);
+  audioCloseTimer = setTimeout(() => {
+    if (audioCtx) {
+      const ref = audioCtx;
+      audioCtx = null;
+      ref.close().catch(() => {});
+    }
+  }, 8000);
+}
 
 function getAudioContext() {
   if (typeof window === 'undefined') return null;
@@ -13,6 +25,7 @@ function getAudioContext() {
   if (audioCtx && audioCtx.state === 'suspended') {
     audioCtx.resume().catch(() => {});
   }
+  scheduleAudioClose();
   return audioCtx;
 }
 

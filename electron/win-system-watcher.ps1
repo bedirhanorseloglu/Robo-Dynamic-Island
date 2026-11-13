@@ -86,6 +86,63 @@ public static class WinWindowHelper {
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
     [DllImport("user32.dll", CharSet = CharSet.Auto)] static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO info);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("psapi.dll")] static extern bool EmptyWorkingSet(IntPtr hProcess);
+
+    public static void TrimMemory() {
+        try {
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Optimized, false);
+            EmptyWorkingSet(GetCurrentProcess());
+        } catch {}
+    }
+
+    public static void GetForegroundAppContext(int excludedPid, out string appName, out string category) {
+        appName = "";
+        category = "desktop";
+        try {
+            IntPtr hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero || !IsWindowVisible(hwnd)) return;
+            uint processId;
+            GetWindowThreadProcessId(hwnd, out processId);
+            if (processId == 0 || processId == (uint)excludedPid) return;
+            using (Process process = Process.GetProcessById((int)processId)) {
+                string proc = (process.ProcessName ?? "").Trim();
+                string low = proc.ToLowerInvariant();
+                string title = "";
+                try { title = (process.MainWindowTitle ?? "").ToLowerInvariant(); } catch {}
+                appName = proc;
+
+                if (low == "zoom" || low == "teams" || low == "ms-teams" || low == "discord" || low == "skype" || low == "webex" || low == "slack") {
+                    category = "meeting";
+                    return;
+                }
+                if (low == "code" || low == "cursor" || low == "windsurf" || low == "antigravity" || low == "antigravity ide" ||
+                    low == "idea64" || low == "pycharm64" || low == "webstorm64" || low == "devenv" ||
+                    low == "windowsterminal" || low == "wt" || low == "pwsh" || low == "powershell" || low == "cmd") {
+                    category = "code";
+                    return;
+                }
+                if (low == "spotify" || low == "vlc" || low == "mpc-hc64" || low == "potplayer" || low == "applemusic") {
+                    category = "media";
+                    return;
+                }
+                if (low == "chrome" || low == "msedge" || low == "firefox" || low == "brave" || low == "comet" || low == "arc" || low == "vivaldi") {
+                    if (title.Contains("meet.google.com") || title.Contains("google meet") || title.Contains("zoom") || title.Contains("microsoft teams")) {
+                        category = "meeting";
+                    } else if (title.Contains("youtube") || title.Contains("netflix") || title.Contains("twitch") || title.Contains("tv+") || title.Contains("tvplus")) {
+                        category = "media";
+                    } else {
+                        category = "browser";
+                    }
+                    return;
+                }
+                if (IsKnownGameProcess(processId)) {
+                    category = "game";
+                    return;
+                }
+            }
+        } catch {}
+    }
 
     static bool IsKnownGameProcess(uint processId) {
         try {
@@ -177,6 +234,17 @@ function Start-AsyncOp($WinRtOperation, $ResultType) {
     return $asTaskGeneric.MakeGenericMethod($ResultType).Invoke($null, @($WinRtOperation))
 }
 
+$mediaManager = $null
+$lastMediaSig = ''
+$lastMediaPoll = [DateTimeOffset]::MinValue
+try {
+    $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
+    if ($null -ne $asTaskGeneric) {
+        $mgrTask = Start-AsyncOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+        if ($mgrTask.Wait(1500)) { $mediaManager = $mgrTask.Result }
+    }
+} catch {}
+
 function Get-NotificationAppLogoDataUri($AppInfo) {
     $memoryStream = $null
     $sourceStream = $null
@@ -227,8 +295,41 @@ function Get-NotificationAppLogoDataUri($AppInfo) {
     }
 }
 
+try {
+    Add-Type -ReferencedAssemblies System.Management -TypeDefinition @'
+using System;
+using System.Management;
+
+public class WinBrightnessHelper {
+    private static ManagementObject cachedObj;
+
+    public static int GetBrightness() {
+        try {
+            if (cachedObj != null) {
+                cachedObj.Get();
+                object val = cachedObj["CurrentBrightness"];
+                if (val != null) return Convert.ToInt32(val);
+            }
+            using (var searcher = new ManagementObjectSearcher("root\\wmi", "SELECT CurrentBrightness FROM WmiMonitorBrightness")) {
+                foreach (ManagementObject obj in searcher.Get()) {
+                    cachedObj = obj;
+                    object val = obj["CurrentBrightness"];
+                    if (val != null) return Convert.ToInt32(val);
+                }
+            }
+        } catch {
+            cachedObj = null;
+        }
+        return -1;
+    }
+}
+'@ -ErrorAction Stop
+} catch {}
+
 $lastVol = -1
 $lastMuted = $false
+$lastAppName = ''
+$lastAppCategory = ''
 $lastBrightness = -1
 $seenNotifIds = @{}
 $watcherStartedAt = [DateTimeOffset]::Now
@@ -267,6 +368,32 @@ while ($true) {
                 $gameModeActive = $isFullscreen
                 Write-Output ((@{ event = 'game-mode'; active = [bool]$gameModeActive }) | ConvertTo-Json -Compress)
             }
+            $fgApp = ''
+            $fgCat = 'desktop'
+            [WinWindowHelper]::GetForegroundAppContext($ElectronPid, [ref]$fgApp, [ref]$fgCat)
+            if ($fgApp -ne $lastAppName -or $fgCat -ne $lastAppCategory) {
+                $lastAppName = $fgApp
+                $lastAppCategory = $fgCat
+                Write-Output ((@{ event = 'app-context'; app = $fgApp; category = $fgCat }) | ConvertTo-Json -Compress)
+            }
+        }
+
+        # Fast in-process SMTC media session/playback detector (zero PowerShell spawn)
+        if ($null -ne $mediaManager -and ($now - $lastMediaPoll).TotalMilliseconds -ge 250) {
+            $lastMediaPoll = $now
+            try {
+                $curSess = $mediaManager.GetCurrentSession()
+                $sig = 'none'
+                if ($null -ne $curSess) {
+                    $pb = $curSess.GetPlaybackInfo()
+                    $tl = $curSess.GetTimelineProperties()
+                    $sig = "$($curSess.SourceAppUserModelId)|$([string]$pb.PlaybackStatus)|$($tl.EndTime.TotalSeconds)"
+                }
+                if ($lastMediaSig -ne '' -and $sig -ne $lastMediaSig) {
+                    Write-Output ((@{ event = 'media-changed' }) | ConvertTo-Json -Compress)
+                }
+                $lastMediaSig = $sig
+            } catch {}
         }
 
         # Reuse the audio endpoint and sample at 10 Hz for responsive HUD updates.
@@ -289,13 +416,19 @@ while ($true) {
             }
         }
 
-        # Sample brightness at a low rate as a fallback: some Windows display drivers
-        # expose the value but never deliver WmiMonitorBrightnessEvent notifications.
-        if ($lastBrightness -lt 0 -or ($now - $lastBrightnessPoll).TotalMilliseconds -ge 700) {
+        # Sample brightness at 10 Hz using cached WMI ManagementObject for instant HUD updates
+        # even when pressing brightness keys repeatedly or when WmiMonitorBrightnessEvent lags.
+        if ($lastBrightness -lt 0 -or ($now - $lastBrightnessPoll).TotalMilliseconds -ge 100) {
             $lastBrightnessPoll = $now
-            $bObj = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($null -ne $bObj -and $null -ne $bObj.CurrentBrightness) {
-                $bri = [int]$bObj.CurrentBrightness
+            $bri = -1
+            try { $bri = [WinBrightnessHelper]::GetBrightness() } catch {}
+            if ($bri -lt 0) {
+                $bObj = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($null -ne $bObj -and $null -ne $bObj.CurrentBrightness) {
+                    $bri = [int]$bObj.CurrentBrightness
+                }
+            }
+            if ($bri -ge 0) {
                 if ($lastBrightness -ge 0 -and $bri -ne $lastBrightness) {
                     $bEv = @{ event = 'brightness'; value = $bri }
                     Write-Output ($bEv | ConvertTo-Json -Compress)
@@ -377,12 +510,12 @@ while ($true) {
         $initialized = $true
     } catch {}
 
-    # Periodic garbage collection for PowerShell to keep RAM footprint minimal
-    if (($now - $lastGcPoll).TotalSeconds -ge 45) {
+    # Periodic garbage collection + working-set trim to keep PowerShell RAM minimal
+    if (-not $initialized -or ($now - $lastGcPoll).TotalSeconds -ge 25) {
         $lastGcPoll = $now
-        [System.GC]::Collect(1, [System.GCCollectionMode]::Optimized)
+        [WinWindowHelper]::TrimMemory()
     }
 
     if ($ghelperBridgeLoaded) { Invoke-GHelperNotificationMessagePump }
-    Start-Sleep -Milliseconds 140
+    Start-Sleep -Milliseconds 95
 }

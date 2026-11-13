@@ -64,9 +64,17 @@ import {
   Palette,
   Keyboard,
   Sparkles,
+  Activity,
   Touchpad as TouchpadIcon,
 } from 'lucide-react';
 import RoboEyes from './RoboEyes';
+import MirrorOverlay from './components/MirrorOverlay';
+import PerfMonitorTab from './components/PerfMonitorTab';
+import NotifToastContent from './components/NotifToastContent';
+import {
+  IdleLiveActivityPill,
+  HomeLiveAndContextStrip,
+} from './components/LiveActivityBar';
 import HeroClock, { CLOCK_FONT_FAMILIES } from './HeroClock';
 import { applyTypographyTokens, readTypographyPreferences, TYPOGRAPHY_STORAGE_KEY } from './typography';
 import NotificationText from './NotificationText';
@@ -161,7 +169,7 @@ function useDominantColor(imageSrc) {
             isLiveCover: true,
           });
         }
-      } catch {}
+      } catch { }
     };
     img.src = imageSrc;
     return () => {
@@ -340,7 +348,7 @@ function formatNotifTime(timestamp) {
   if (diffDays === 1) return 'dün';
   if (diffDays < 7) return `${diffDays} gün`;
   const d = new Date(time);
-  return `${d.getDate()} ${['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'][d.getMonth()]}`;
+  return `${d.getDate()} ${['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'][d.getMonth()]}`;
 }
 
 function NotificationAvatar({ banner, brand, presentation }) {
@@ -1130,11 +1138,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (previousTabRef.current !== activeTab) {
-      previousTabRef.current = activeTab;
-      triggerRoboReaction('tab-change', 1, 850);
-    }
-  }, [activeTab, triggerRoboReaction]);
+    previousTabRef.current = activeTab;
+  }, [activeTab]);
 
   useEffect(() => {
     if (timerRunning && !previousTimerRunningRef.current) {
@@ -1168,7 +1173,7 @@ export default function App() {
   const [modeToggles, setModeToggles] = useState(() => readModePreferences().modeToggles);
 
   useEffect(() => {
-    try { localStorage.setItem('twocode-mode-preferences', JSON.stringify({ selectedModeName, modeToggles })); } catch {}
+    try { localStorage.setItem('twocode-mode-preferences', JSON.stringify({ selectedModeName, modeToggles })); } catch { }
   }, [selectedModeName, modeToggles]);
 
   // TRAY tab & Global Drag-Drop state
@@ -1192,7 +1197,7 @@ export default function App() {
         ]);
         if (!mounted) return;
         setNetworkInfo((current) => ({ ...current, ...(network || {}), ...(radios || {}) }));
-      } catch {}
+      } catch { }
     };
     refresh();
     const timer = setInterval(refresh, 12000);
@@ -1295,7 +1300,7 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem('twocode_note', notesText);
-    } catch {}
+    } catch { }
   }, [notesText]);
 
   const toggleNoteTask = (lineIndex) => {
@@ -1344,9 +1349,9 @@ export default function App() {
   const [isDraggingVolume, setIsDraggingVolume] = useState(false);
   const volumeBarRef = useRef(null);
 
-  // Mirror webcam ref
-  const mirrorVideoRef = useRef(null);
-  const mirrorStreamRef = useRef(null);
+  // App-Aware Context & Live Activities (Steam / Downloads)
+  const [appContext, setAppContext] = useState({ app: '', category: 'desktop' });
+  const [liveActivity, setLiveActivity] = useState(null);
 
   const batteryTimerRef = useRef(null);
   const hudTimerRef = useRef(null);
@@ -1375,7 +1380,7 @@ export default function App() {
     body: '',
   });
   useEffect(() => {
-    try { localStorage.setItem('twocode-notification-history', JSON.stringify(notificationHistory.slice(0, 100))); } catch {}
+    try { localStorage.setItem('twocode-notification-history', JSON.stringify(notificationHistory.slice(0, 100))); } catch { }
   }, [notificationHistory]);
   const openNotification = (item) => {
     setNotificationHistory((items) => items.map((entry) => entry.id === item?.id ? { ...entry, isRead: true } : entry));
@@ -1422,9 +1427,13 @@ export default function App() {
   }, [liveMedia?.position, liveMedia?.title, isScrubbing]);
 
   // Advance by real elapsed time so lyric timing stays locked to the media clock.
-  // ONLY run when media is actively playing to save CPU and RAM idle churn.
+  // ONLY run when media is actively playing AND a media-displaying surface is visible.
   useEffect(() => {
-    if (!liveMedia?.isPlaying || isScrubbing) return;
+    const mediaUiVisible =
+      islandMode === 'expanded' ||
+      islandMode === 'music-bar' ||
+      islandMode === 'focus-bar-media';
+    if (!liveMedia?.isPlaying || isScrubbing || !mediaUiVisible) return;
     lastMediaTickRef.current = Date.now();
     const mediaTick = setInterval(() => {
       const now = Date.now();
@@ -1438,7 +1447,7 @@ export default function App() {
       });
     }, 250);
     return () => clearInterval(mediaTick);
-  }, [liveMedia?.isPlaying, isScrubbing]);
+  }, [liveMedia?.isPlaying, isScrubbing, islandMode]);
 
   // Active media comes strictly from live Windows SMTC with sub-second smooth position
   const currentMedia = useMemo(() => {
@@ -1473,8 +1482,8 @@ export default function App() {
     userPickedClockColor
       ? clockColor
       : musicAccent.isLiveCover && islandSettings.islandMusicColour !== false
-      ? musicAccent.hex
-      : '#ffffff';
+        ? musicAccent.hex
+        : '#ffffff';
 
   // Synced lyrics & karaoke line progress calculation with accurate intro & break handling
   const { hasSyncedLyrics, primaryLine, secondaryLine } = useMemo(() => {
@@ -1578,31 +1587,25 @@ export default function App() {
     return () => clearTimeout(t);
   }, []);
 
-  // Manage webcam stream when Mirror app is opened/closed
+  // Listen for App-Aware Context & Live Activities (Steam / Downloads)
   useEffect(() => {
-    if (islandOverlay === 'mirror') {
-      navigator.mediaDevices
-        ?.getUserMedia({ video: { width: 640, height: 360 }, audio: false })
-        .then((stream) => {
-          mirrorStreamRef.current = stream;
-          if (mirrorVideoRef.current) {
-            mirrorVideoRef.current.srcObject = stream;
-          }
-        })
-        .catch(() => {});
-    } else {
-      if (mirrorStreamRef.current) {
-        mirrorStreamRef.current.getTracks().forEach((tr) => tr.stop());
-        mirrorStreamRef.current = null;
-      }
+    const cleanups = [];
+    if (window.twocode?.onAppContext) {
+      cleanups.push(window.twocode.onAppContext((ctx) => {
+        if (ctx) setAppContext(ctx);
+      }));
     }
-    return () => {
-      if (mirrorStreamRef.current) {
-        mirrorStreamRef.current.getTracks().forEach((tr) => tr.stop());
-        mirrorStreamRef.current = null;
-      }
-    };
-  }, [islandOverlay]);
+    if (window.twocode?.onLiveActivity) {
+      cleanups.push(window.twocode.onLiveActivity((act) => {
+        if (!act || !act.active) {
+          setLiveActivity((prev) => (prev && act?.kind && prev.kind !== act.kind ? prev : null));
+        } else {
+          setLiveActivity(act);
+        }
+      }));
+    }
+    return () => cleanups.forEach((fn) => fn && fn());
+  }, []);
 
   const resolvedCollapsedModeRef = useRef(resolvedCollapsedMode);
   useEffect(() => {
@@ -1692,7 +1695,7 @@ export default function App() {
           bat.addEventListener('levelchange', handleBatteryChange);
           bat.addEventListener('chargingchange', handleBatteryChange);
         })
-        .catch(() => {});
+        .catch(() => { });
     }
     return () => {
       if (batteryObj) {
@@ -1889,7 +1892,7 @@ export default function App() {
       }
     };
     const unsubGameMode = window.twocode.onGameModeChange?.(handleGameModeChange);
-    window.twocode.isGameModeActive?.().then(handleGameModeChange).catch(() => {});
+    window.twocode.isGameModeActive?.().then(handleGameModeChange).catch(() => { });
 
     const unsubMedia = window.twocode.onMediaUpdate((data) => {
       const nextMedia = data || { hasSession: false, isPlaying: false };
@@ -1915,11 +1918,7 @@ export default function App() {
 
     const unsubClip = window.twocode.onClipboardUpdate((list) => {
       if (Array.isArray(list)) {
-        const latestId = list[0]?.id ?? null;
-        if (latestId !== null && (previousClipboardIdRef.current === null || latestId !== previousClipboardIdRef.current)) {
-          triggerRoboReaction('clipboard', 1, 900);
-        }
-        previousClipboardIdRef.current = latestId;
+        previousClipboardIdRef.current = list[0]?.id ?? null;
         setClips(list);
       }
     });
@@ -2356,6 +2355,7 @@ export default function App() {
     { id: 'clips', label: 'CLIPS', icon: Copy },
     { id: 'notes', label: 'NOTE', icon: FileText },
     { id: 'cal', label: 'AGENDA', icon: Calendar },
+    { id: 'perf', label: 'PERF', icon: Activity },
     // { id: 'inbox', label: 'MAIL', icon: Mail },
   ];
 
@@ -2365,16 +2365,22 @@ export default function App() {
     currentMedia.duration > 0
       ? Math.min(100, Math.max(0, (currentMedia.position / currentMedia.duration) * 100))
       : currentMedia.hasSession
-      ? 35
-      : 0;
+        ? 35
+        : 0;
   const remainingSec = Math.max(0, (currentMedia.duration || 0) - (currentMedia.position || 0));
 
-  // Robo's eyes reflect the most relevant live state; low battery color has priority.
+  // Robo's eyes & props reflect the most relevant live device/app state (never random).
   const topEyeMood = timerRunning || activeTab === 'timer'
     ? 'focus-arc'
     : currentMedia.hasSession && currentMedia.isPlaying
-    ? 'music'
-    : roboMood;
+      ? 'music'
+      : islandSettings.doNotDisturb
+        ? 'dnd-sleep'
+        : ghelperStatus.performanceMode === 2
+          ? 'turbo'
+          : activeHookTask
+            ? 'thinking'
+            : roboMood;
 
   const noteCheckItems = notesText
     .split('\n')
@@ -2399,8 +2405,8 @@ export default function App() {
     const categoryMatches = mailCategory === 'primary'
       ? !category || /primary|inbox|birincil|öncelikli/.test(category)
       : mailCategory === 'updates'
-      ? /updates|güncellemeler/.test(category)
-      : /promotions|tanıtımlar|promosyon/.test(category);
+        ? /updates|güncellemeler/.test(category)
+        : /promotions|tanıtımlar|promosyon/.test(category);
     return categoryMatches;
   });
   const openNotificationHistory = () => {
@@ -2437,13 +2443,11 @@ export default function App() {
     >
       <div
         ref={morphShellRef}
-        className={`notch-morph-shell state-${islandMode} mode-${activeTab} ${batteryAlertKind === 'charging' ? 'is-charging' : ''} ${
-          activeTab === 'home' && isCustomizingClock ? 'customizing-clock' : ''
-        } ${musicAccent.hasColor ? 'has-cover-color' : ''} ${
-          islandMode === 'hud' && hudOverlay.ghelper?.category === 'aura'
+        className={`notch-morph-shell state-${islandMode} mode-${activeTab} ${batteryAlertKind === 'charging' ? 'is-charging' : ''} ${activeTab === 'home' && isCustomizingClock ? 'customizing-clock' : ''
+          } ${musicAccent.hasColor ? 'has-cover-color' : ''} ${islandMode === 'hud' && hudOverlay.ghelper?.category === 'aura'
             ? `has-aura-hud effect-${hudOverlay.ghelper.effectType || 'static'}`
             : ''
-        }`}
+          }`}
         style={{
           '--music-accent-rgb': musicAccent.rgb,
           '--music-accent-hex': musicAccent.hex,
@@ -2500,19 +2504,24 @@ export default function App() {
         }}
       >
         {/* ============================================================
-            COLLAPSED LAYER 1: IDLE MINI-NOTCH (Robo's glowing eyes)
+            COLLAPSED LAYER 1: IDLE MINI-NOTCH (Robo's glowing eyes + Live Activity / Mic)
             ============================================================ */}
         <div className={`morph-layer layer-idle ${islandMode === 'idle' ? 'is-visible' : ''}`}>
-          <div className="idle-eyes-center">
-            <RoboEyes
-              mood={topEyeMood}
-              reaction={roboReaction}
-              active={documentVisible && islandMode === 'idle'}
-              size="normal"
-              batteryPercent={batteryPercent}
-              batteryCharging={batteryCharging}
-            />
-          </div>
+          {liveActivity?.active ? (
+            <IdleLiveActivityPill liveActivity={liveActivity} />
+          ) : (
+            <div className="idle-eyes-center">
+              <RoboEyes
+                mood={topEyeMood}
+                reaction={roboReaction}
+                active={documentVisible && islandMode === 'idle'}
+                trackCursor={false}
+                size="normal"
+                batteryPercent={batteryPercent}
+                batteryCharging={batteryCharging}
+              />
+            </div>
+          )}
         </div>
 
         {/* ============================================================
@@ -2520,15 +2529,14 @@ export default function App() {
             Matches screenshot media_1794017471677_b790137d.png
             ============================================================ */}
         <div
-          className={`morph-layer layer-mini-progress ${
-            islandMode === 'mini-progress' ? 'is-visible' : ''
-          }`}
+          className={`morph-layer layer-mini-progress ${islandMode === 'mini-progress' ? 'is-visible' : ''
+            }`}
           title="Normal görünüme dönmek için sağ tıkla veya tıkla"
         >
           <div className="mini-progress-track">
             <div
               className="mini-progress-fill"
-              style={{ width: `${ Math.max(6, progressPercent) }%` }}
+              style={{ width: `${Math.max(6, progressPercent)}%` }}
             />
           </div>
         </div>
@@ -2551,11 +2559,6 @@ export default function App() {
                         <rect x="3.5" y="3.5" width={Math.max(3.5, (21 * Math.min(100, Math.max(0, batteryPercent))) / 100)} height="11" rx="2.5" fill="#30D158" className="battery-fill-rect" />
                         <path d="M29 6.5V11.5" stroke="#30D158" strokeWidth="2.2" strokeLinecap="round" />
                       </svg>
-                      <div className="charging-bolt-glow">
-                        <svg className="charging-bolt-svg" width="13" height="17" viewBox="0 0 14 18" fill="none">
-                          <path d="M8.2 1L1.8 10H7.2L5.8 17L12.2 8H6.8L8.2 1Z" fill="#ffffff" />
-                        </svg>
-                      </div>
                     </div>
                   ) : (
                     <div className="battery-low-graphic">
@@ -2622,7 +2625,7 @@ export default function App() {
 
                 {/* 2. Clean Minimalist Typography */}
                 <div className="hud-aura-text-row">
-                  <span className="hud-aura-label">{hudOverlay.ghelper.label || 'Laptop Klavyesi'}</span>
+                  <span className="hud-aura-label"></span>
                   <span className="hud-aura-val">{hudOverlay.ghelper.valueText || 'Sabit'}</span>
                 </div>
 
@@ -2641,13 +2644,12 @@ export default function App() {
               </div>
             ) : (
               <div
-                className={`hud-ghelper-wrap cat-${hudOverlay.ghelper.category} ${
-                  hudOverlay.ghelper.category === 'mode'
-                    ? `perf-mode-${typeof hudOverlay.ghelper.modeIndex === 'number' ? hudOverlay.ghelper.modeIndex : ghelperStatus.performanceMode}`
-                    : hudOverlay.ghelper.category === 'gpu'
+                className={`hud-ghelper-wrap cat-${hudOverlay.ghelper.category} ${hudOverlay.ghelper.category === 'mode'
+                  ? `perf-mode-${typeof hudOverlay.ghelper.modeIndex === 'number' ? hudOverlay.ghelper.modeIndex : ghelperStatus.performanceMode}`
+                  : hudOverlay.ghelper.category === 'gpu'
                     ? `gpu-mode-${typeof hudOverlay.ghelper.gpuIndex === 'number' ? hudOverlay.ghelper.gpuIndex : ghelperStatus.gpuMode}`
                     : ''
-                } ${hudOverlay.ghelper.category === 'backlight' && hudOverlay.ghelper.level === 0 ? 'is-off' : ''}`}
+                  } ${hudOverlay.ghelper.category === 'backlight' && hudOverlay.ghelper.level === 0 ? 'is-off' : ''}`}
                 style={{
                   ...(hudOverlay.ghelper.category === 'mode' ? {
                     '--mode-perf-color': (GHELPER_PERF_MODES[typeof hudOverlay.ghelper.modeIndex === 'number' ? hudOverlay.ghelper.modeIndex : ghelperStatus.performanceMode] || GHELPER_PERF_MODES[0]).color,
@@ -2774,36 +2776,16 @@ export default function App() {
           onClick={() => openNotification(toastBanner)}
           onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') openNotification(toastBanner); }}
         >
-          <div className="notif-toast-ambient" aria-hidden="true" />
-          <div className="notif-toast-hero">
-            <NotificationAvatar banner={toastBanner} brand={notifBrand.brand} presentation={notifPresentation} />
-          </div>
-          <div className="notif-toast-main">
-            <div className="notif-toast-top-row">
-              <span className="notif-toast-app-label">{notifPresentation.app}</span>
-              <span className="notif-toast-sep" aria-hidden="true">·</span>
-              <span className="notif-toast-time">şimdi</span>
-              <span className="notif-toast-arrow" aria-hidden="true">↗</span>
-            </div>
-            <div className="notif-toast-message-row">
-              <span className="notif-toast-headline">
-                <NotificationText text={notifPresentation.title} />
-              </span>
-              {Boolean(
-                notifPresentation.subtitle &&
-                notifPresentation.subtitle.trim() &&
-                notifPresentation.subtitle !== notifPresentation.title &&
-                notifPresentation.subtitle !== notifPresentation.app
-              ) && (
-                <span className="notif-toast-body">
-                  <NotificationText text={notifPresentation.subtitle} />
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="notif-toast-countdown-track" aria-hidden="true">
-            <div className="notif-toast-countdown-bar" />
-          </div>
+          <NotifToastContent
+            avatarNode={
+              <NotificationAvatar
+                banner={toastBanner}
+                brand={notifBrand.brand}
+                presentation={notifPresentation}
+              />
+            }
+            presentation={notifPresentation}
+          />
         </div>
 
         {/* ============================================================
@@ -2811,9 +2793,8 @@ export default function App() {
             Matches screenshots media_1794017581469_4fb13cc8.png & media_1794019642044_7536817b.png
             ============================================================ */}
         <div
-          className={`morph-layer layer-music-bar ${
-            islandMode === 'music-bar' ? 'is-visible' : ''
-          } ${hasSyncedLyrics ? 'is-karaoke-mode' : ''}`}
+          className={`morph-layer layer-music-bar ${islandMode === 'music-bar' ? 'is-visible' : ''
+            } ${hasSyncedLyrics ? 'is-karaoke-mode' : ''}`}
         >
           <div className="compact-left">
             {currentMedia.thumbnail ? (
@@ -2848,9 +2829,8 @@ export default function App() {
             Matches screenshot media_1794019559611_7bcce858.png
             ============================================================ */}
         <div
-          className={`morph-layer layer-focus-bar ${
-            islandMode === 'focus-bar' || islandMode === 'focus-bar-media' ? 'is-visible' : ''
-          }`}
+          className={`morph-layer layer-focus-bar ${islandMode === 'focus-bar' || islandMode === 'focus-bar-media' ? 'is-visible' : ''
+            }`}
         >
           <div className="focus-notch-ring-wrap">
             <svg width="22" height="22" viewBox="0 0 22 22">
@@ -2873,9 +2853,8 @@ export default function App() {
             EXPANDED LAYER 4: FULL DYNAMIC ISLAND
             ============================================================ */}
         <div
-          className={`morph-layer layer-expanded ${
-            islandMode === 'expanded' ? 'is-visible' : ''
-          }`}
+          className={`morph-layer layer-expanded ${islandMode === 'expanded' ? 'is-visible' : ''
+            }`}
         >
           {/* TOP STATUS BAR */}
           <header className="island-topbar">
@@ -3060,18 +3039,18 @@ export default function App() {
             <div className="topbar-center">
               {(islandOverlay || roboReaction ||
                 (activeTab !== 'code' && activeTab !== 'robo')) && (
-                <RoboEyes
-                  mood={topEyeMood}
-                  reaction={roboReaction}
-                  active={documentVisible && (islandMode === 'expanded' || Boolean(roboReaction))}
-                  batteryPercent={batteryPercent}
-                  batteryCharging={batteryCharging}
-                  onPoke={(m) => {
-                    setRoboMood(m);
-                    playRoboSound(m, islandSettings.soundEffects !== false);
-                  }}
-                />
-              )}
+                  <RoboEyes
+                    mood={topEyeMood}
+                    reaction={roboReaction}
+                    active={documentVisible && (islandMode === 'expanded' || Boolean(roboReaction))}
+                    batteryPercent={batteryPercent}
+                    batteryCharging={batteryCharging}
+                    onPoke={(m) => {
+                      setRoboMood(m);
+                      playRoboSound(m, islandSettings.soundEffects !== false);
+                    }}
+                  />
+                )}
             </div>
 
             <div className="topbar-right">
@@ -3308,130 +3287,130 @@ export default function App() {
           </header>
 
           {notificationHistoryOpen && (
-              <section
-                ref={notificationHistoryPanelRef}
-                id="notification-history-panel"
-                className="notification-history-panel"
-                aria-label="Bildirim geçmişi"
-                style={(() => {
-                  const newest = notificationHistory[0];
-                  const accent = resolveNotifBrand(newest, newest?.logoAccent);
-                  return { '--notif-panel-rgb': accent.rgb, '--notif-panel-hex': accent.hex };
-                })()}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="notif-panel-ambient-glow" aria-hidden="true" />
+            <section
+              ref={notificationHistoryPanelRef}
+              id="notification-history-panel"
+              className="notification-history-panel"
+              aria-label="Bildirim geçmişi"
+              style={(() => {
+                const newest = notificationHistory[0];
+                const accent = resolveNotifBrand(newest, newest?.logoAccent);
+                return { '--notif-panel-rgb': accent.rgb, '--notif-panel-hex': accent.hex };
+              })()}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="notif-panel-ambient-glow" aria-hidden="true" />
 
-                <header className="notification-history-header">
-                  <div className="notification-history-heading">
-                    <span className="notification-history-icon"><Bell size={13} strokeWidth={2.2} /></span>
-                    <strong className="notification-history-title">Bildirimler</strong>
-                    {notificationHistory.length > 0 && (
-                      <span className="notif-history-badge">
-                        {unreadNotificationCount > 0 ? `${unreadNotificationCount} yeni` : `${notificationHistory.length}`}
-                      </span>
-                    )}
-                  </div>
-                  <div className="notification-history-actions">
-                    {notificationHistory.length > 0 && (
-                      <button
-                        className="notification-history-clear"
-                        type="button"
-                        onClick={() => setNotificationHistory([])}
-                        title="Tüm bildirimleri temizle"
-                      >
-                        Temizle
-                      </button>
-                    )}
+              <header className="notification-history-header">
+                <div className="notification-history-heading">
+                  <span className="notification-history-icon"><Bell size={13} strokeWidth={2.2} /></span>
+                  <strong className="notification-history-title">Bildirimler</strong>
+                  {notificationHistory.length > 0 && (
+                    <span className="notif-history-badge">
+                      {unreadNotificationCount > 0 ? `${unreadNotificationCount} yeni` : `${notificationHistory.length}`}
+                    </span>
+                  )}
+                </div>
+                <div className="notification-history-actions">
+                  {notificationHistory.length > 0 && (
                     <button
-                      className="notification-history-close"
+                      className="notification-history-clear"
                       type="button"
-                      aria-label="Kapat"
-                      title="Kapat"
-                      onClick={() => setNotificationHistoryOpen(false)}
+                      onClick={() => setNotificationHistory([])}
+                      title="Tüm bildirimleri temizle"
                     >
-                      <X size={14} strokeWidth={2.2} />
+                      Temizle
                     </button>
-                  </div>
-                </header>
+                  )}
+                  <button
+                    className="notification-history-close"
+                    type="button"
+                    aria-label="Kapat"
+                    title="Kapat"
+                    onClick={() => setNotificationHistoryOpen(false)}
+                  >
+                    <X size={14} strokeWidth={2.2} />
+                  </button>
+                </div>
+              </header>
 
-                <div className="notification-history-list">
-                  {notificationHistory.length ? notificationHistory.map((item, index) => (
-                    <div
-                      className={`notif-card ${item.isRead ? 'is-read' : 'is-unread'}`}
-                      key={item.id}
-                      style={(() => {
-                        const accent = resolveNotifBrand(item, item.logoAccent);
-                        return {
-                          '--notif-accent-rgb': accent.rgb,
-                          '--notif-accent-hex': accent.hex,
-                          '--card-delay': `${Math.min(index * 35, 240)}ms`,
-                        };
-                      })()}
+              <div className="notification-history-list">
+                {notificationHistory.length ? notificationHistory.map((item, index) => (
+                  <div
+                    className={`notif-card ${item.isRead ? 'is-read' : 'is-unread'}`}
+                    key={item.id}
+                    style={(() => {
+                      const accent = resolveNotifBrand(item, item.logoAccent);
+                      return {
+                        '--notif-accent-rgb': accent.rgb,
+                        '--notif-accent-hex': accent.hex,
+                        '--card-delay': `${Math.min(index * 35, 240)}ms`,
+                      };
+                    })()}
+                  >
+                    <button
+                      type="button"
+                      className="notif-card-main"
+                      onClick={() => openNotification(item)}
+                      aria-label={`${item.app || 'Uygulama'} bildirimini aç`}
                     >
-                      <button
-                        type="button"
-                        className="notif-card-main"
-                        onClick={() => openNotification(item)}
-                        aria-label={`${item.app || 'Uygulama'} bildirimini aç`}
-                      >
-                        <div className="notif-card-avatar">
-                          <NotificationAvatar
-                            banner={item}
-                            brand={resolveNotifBrand(item).brand}
-                            presentation={resolveNotificationPresentation(item)}
-                          />
+                      <div className="notif-card-avatar">
+                        <NotificationAvatar
+                          banner={item}
+                          brand={resolveNotifBrand(item).brand}
+                          presentation={resolveNotificationPresentation(item)}
+                        />
+                      </div>
+
+                      <div className="notif-card-content">
+                        <div className="notif-card-top-row">
+                          <span className="notif-card-app-label">{item.app || 'Sistem'}</span>
+                          <span className="notif-card-sep" aria-hidden="true">·</span>
+                          <span className="notif-card-time">{formatNotifTime(item.timestamp)}</span>
                         </div>
 
-                        <div className="notif-card-content">
-                          <div className="notif-card-top-row">
-                            <span className="notif-card-app-label">{item.app || 'Sistem'}</span>
-                            <span className="notif-card-sep" aria-hidden="true">·</span>
-                            <span className="notif-card-time">{formatNotifTime(item.timestamp)}</span>
-                          </div>
-
-                          <div className="notif-card-message-row">
-                            <span className="notif-card-headline">
-                              <NotificationText text={item.title || item.app} />
-                            </span>
-                            {Boolean(
-                              item.body &&
-                              item.body.trim() &&
-                              item.body !== item.title &&
-                              item.body !== item.app
-                            ) && (
+                        <div className="notif-card-message-row">
+                          <span className="notif-card-headline">
+                            <NotificationText text={item.title || item.app} />
+                          </span>
+                          {Boolean(
+                            item.body &&
+                            item.body.trim() &&
+                            item.body !== item.title &&
+                            item.body !== item.app
+                          ) && (
                               <span className="notif-card-body">
                                 <NotificationText text={item.body} />
                               </span>
                             )}
-                          </div>
                         </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        className="notif-card-delete"
-                        aria-label="Bildirimi sil"
-                        title="Bildirimi sil"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNotificationHistory((items) => items.filter((entry) => entry.id !== item.id));
-                        }}
-                      >
-                        <Trash2 size={13} strokeWidth={2} />
-                      </button>
-                    </div>
-                  )) : (
-                    <div className="notification-history-empty">
-                      <div className="notification-empty-icon">
-                        <Bell size={20} strokeWidth={2} />
                       </div>
-                      <strong className="notification-empty-title">Bildirim Yok</strong>
-                      <span className="notification-empty-desc">Yeni bildirimler geldiğinde burada toplanır.</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="notif-card-delete"
+                      aria-label="Bildirimi sil"
+                      title="Bildirimi sil"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setNotificationHistory((items) => items.filter((entry) => entry.id !== item.id));
+                      }}
+                    >
+                      <Trash2 size={13} strokeWidth={2} />
+                    </button>
+                  </div>
+                )) : (
+                  <div className="notification-history-empty">
+                    <div className="notification-empty-icon">
+                      <Bell size={20} strokeWidth={2} />
                     </div>
-                  )}
-                </div>
-              </section>
+                    <strong className="notification-empty-title">Bildirim Yok</strong>
+                    <span className="notification-empty-desc">Yeni bildirimler geldiğinde burada toplanır.</span>
+                  </div>
+                )}
+              </div>
+            </section>
           )}
 
           {/* ============================================================
@@ -3500,25 +3479,7 @@ export default function App() {
               </div>
             </div>
           ) : islandOverlay === 'mirror' ? (
-            /* ============================================================
-               OVERLAY 1B: MIRROR WEBCAM VIEW
-               ============================================================ */
-            <div className="mirror-overlay-view">
-              <video
-                ref={mirrorVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="mirror-video-feed"
-              />
-              <button
-                type="button"
-                className="mirror-close-pill"
-                onClick={() => setIslandOverlay(null)}
-              >
-                Done
-              </button>
-            </div>
+            <MirrorOverlay onClose={() => setIslandOverlay(null)} />
           ) : (
             <>
               {/* MAIN TAB CONTENT AREA */}
@@ -3715,14 +3676,13 @@ export default function App() {
                                   { idx: 2, cls: 'font-editorial' },
                                   { idx: 3, cls: 'font-mono-dot' },
                                   { idx: 4, cls: 'font-script' },
-                                  ].map((f) => (
+                                ].map((f) => (
                                   <button
                                     key={f.idx}
                                     type="button"
-                                    className={`font-preview-pill ${f.cls} ${
-                                      clockFontIndex === f.idx ? 'is-selected' : ''
-                                    }`}
-                                      style={{ fontFamily: CLOCK_FONT_FAMILIES[f.idx] }}
+                                    className={`font-preview-pill ${f.cls} ${clockFontIndex === f.idx ? 'is-selected' : ''
+                                      }`}
+                                    style={{ fontFamily: CLOCK_FONT_FAMILIES[f.idx] }}
                                     onClick={() => setClockFontIndex(f.idx)}
                                   >
                                     12
@@ -3753,11 +3713,10 @@ export default function App() {
                                   <button
                                     key={hex}
                                     type="button"
-                                    className={`color-swatch-circle ${
-                                      userPickedClockColor && clockColor === hex
-                                        ? 'is-selected'
-                                        : ''
-                                    }`}
+                                    className={`color-swatch-circle ${userPickedClockColor && clockColor === hex
+                                      ? 'is-selected'
+                                      : ''
+                                      }`}
                                     style={{ background: hex }}
                                     aria-label={`Saat rengi ${hex}`}
                                     aria-pressed={userPickedClockColor && clockColor === hex}
@@ -3769,9 +3728,8 @@ export default function App() {
                                 ))}
                                 <button
                                   type="button"
-                                  className={`color-swatch-circle rainbow-wheel ${
-                                    !userPickedClockColor ? 'is-selected' : ''
-                                  }`}
+                                  className={`color-swatch-circle rainbow-wheel ${!userPickedClockColor ? 'is-selected' : ''
+                                    }`}
                                   onClick={() => {
                                     setUserPickedClockColor(false);
                                     setClockColor('#7ea6d8');
@@ -3830,201 +3788,202 @@ export default function App() {
                               <div className="clock-advanced-options">
                                 <span>Saat biçimi</span>
                                 <div className="clock-time-options" aria-label="Saat biçimi">
-                                <button
-                                  type="button"
-                                  className={clock24Hour ? 'is-selected' : ''}
-                                  aria-pressed={clock24Hour}
-                                  onClick={() => setClock24Hour(true)}
-                                >24 saat</button>
-                                <button
-                                  type="button"
-                                  className={!clock24Hour ? 'is-selected' : ''}
-                                  aria-pressed={!clock24Hour}
-                                  onClick={() => setClock24Hour(false)}
-                                >12 saat</button>
-                                <button
-                                  type="button"
-                                  className={clockShowSeconds ? 'is-selected' : ''}
-                                  aria-pressed={clockShowSeconds}
-                                  onClick={() => setClockShowSeconds((value) => !value)}
-                                >Saniye</button>
+                                  <button
+                                    type="button"
+                                    className={clock24Hour ? 'is-selected' : ''}
+                                    aria-pressed={clock24Hour}
+                                    onClick={() => setClock24Hour(true)}
+                                  >24 saat</button>
+                                  <button
+                                    type="button"
+                                    className={!clock24Hour ? 'is-selected' : ''}
+                                    aria-pressed={!clock24Hour}
+                                    onClick={() => setClock24Hour(false)}
+                                  >12 saat</button>
+                                  <button
+                                    type="button"
+                                    className={clockShowSeconds ? 'is-selected' : ''}
+                                    aria-pressed={clockShowSeconds}
+                                    onClick={() => setClockShowSeconds((value) => !value)}
+                                  >Saniye</button>
                                 </div>
                               </div>
                             )}
                           </div>
                         ) : (
                           <>
-                          <div className="home-cards-row">
-                            {/* Left Card: Matches original TwoCode (`0 / jobs today`) */}
-                            <div
-                              className="home-card jobs-card"
-                              onClick={() => setActiveTab('code')}
-                              title="AI & Görev geçmişini aç"
-                            >
-                              <span
-                                className={`job-status-square ${
-                                  pendingApproval
+                            <HomeLiveAndContextStrip
+                              liveActivity={liveActivity}
+                              appContext={appContext}
+                              onOpenMirror={() => setIslandOverlay('mirror')}
+                            />
+                            <div className="home-cards-row">
+                              {/* Left Card: Matches original TwoCode (`0 / jobs today`) */}
+                              <div
+                                className="home-card jobs-card"
+                                onClick={() => setActiveTab('code')}
+                                title="AI & Görev geçmişini aç"
+                              >
+                                <span
+                                  className={`job-status-square ${pendingApproval
                                     ? 'pulse-amber'
                                     : activeHookTask
-                                    ? 'active-white'
-                                    : 'dim-grey'
-                                }`}
-                              />
-                              <div className="home-card-meta">
-                                <strong className="home-card-big mono">
-                                  {pendingApproval ? 'Approval' : `${jobsToday}`}
-                                </strong>
-                                <span className="home-card-sub">
-                                  {pendingApproval ? 'needed now' : 'jobs today'}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Middle Card: Live Windows Media with crimson placeholder & ambient color */}
-                            <div
-                              className={`home-card media-mini-card ${
-                                musicAccent.hasColor ? 'tinted-media-card' : ''
-                              } ${!currentMedia.hasSession ? 'is-nothing-playing' : ''} ${
-                                !currentMedia.hasSession && showMusicServicePicker
-                                  ? 'service-picker-open'
-                                  : ''
-                              }`}
-                              onClick={() => {
-                                if (!currentMedia.hasSession) {
-                                  playRoboSound('tap', islandSettings.soundEffects !== false);
-                                  setShowMusicServicePicker((p) => !p);
-                                } else {
-                                  setActiveTab('music');
-                                }
-                              }}
-                              title={
-                                !currentMedia.hasSession
-                                  ? 'Spotify veya YouTube Music başlatmak için tıkla'
-                                  : 'Müzik görünümünü aç'
-                              }
-                            >
-                              {!currentMedia.hasSession && showMusicServicePicker ? (
-                                <div
-                                  className="music-service-picker-row"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button
-                                    type="button"
-                                    className="music-service-logo-btn spotify-btn"
-                                    onClick={(e) => handleLaunchMusicService(e, 'spotify')}
-                                    title="Spotify Aç"
-                                  >
-                                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-                                      <circle cx="12" cy="12" r="11" fill="#1ED760" />
-                                      <path
-                                        d="M16.9 10.6C13.9 8.8 8.9 8.6 6.1 9.5C5.6 9.6 5.1 9.4 5 8.9C4.9 8.4 5.1 7.9 5.6 7.8C8.9 6.8 14.4 7 17.9 9.1C18.3 9.3 18.5 9.9 18.2 10.3C18 10.7 17.4 10.9 16.9 10.6ZM16.8 13.5C16.6 13.9 16.1 14 15.7 13.7C13.2 12.2 9.4 11.7 6.5 12.6C6.1 12.7 5.6 12.5 5.5 12.1C5.4 11.7 5.6 11.2 6 11.1C9.4 10.1 13.6 10.6 16.5 12.4C16.9 12.6 17 13.1 16.8 13.5ZM15.5 16.3C15.3 16.6 14.9 16.7 14.6 16.5C12.4 15.2 9.7 14.9 6.6 15.6C6.3 15.7 5.9 15.5 5.8 15.1C5.7 14.8 5.9 14.4 6.3 14.3C9.8 13.5 12.8 13.8 15.3 15.3C15.6 15.5 15.7 16 15.5 16.3Z"
-                                        fill="#000000"
-                                      />
-                                    </svg>
-                                    <span>Spotify</span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className="music-service-logo-btn ytmusic-btn"
-                                    onClick={(e) => handleLaunchMusicService(e, 'ytmusic')}
-                                    title="YouTube Music Aç"
-                                  >
-                                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-                                      <circle cx="12" cy="12" r="11" fill="#FF0033" />
-                                      <circle
-                                        cx="12"
-                                        cy="12"
-                                        r="6.2"
-                                        stroke="#FFFFFF"
-                                        strokeWidth="1.4"
-                                      />
-                                      <polygon points="10.4,9.3 15.2,12 10.4,14.7" fill="#FFFFFF" />
-                                    </svg>
-                                    <span>YT Music</span>
-                                  </button>
-                                </div>
-                              ) : (
-                                <>
-                                  {currentMedia.thumbnail ? (
-                                    <img
-                                      src={currentMedia.thumbnail}
-                                      alt=""
-                                      className="mini-card-cover"
-                                    />
-                                  ) : (
-                                    <div className="mini-card-cover crimson-placeholder-cover" />
-                                  )}
-                                  <div className="home-card-meta truncate">
-                                    <strong className="home-card-title">
-                                      {currentMedia.title}
-                                    </strong>
-                                    {currentMedia.hasSession && (
-                                      <span className="home-card-sub">
-                                        {currentMedia.artist || 'Windows Media'}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <button
-                                    type="button"
-                                    className={`circle-white-btn ${
-                                      !currentMedia.hasSession ? 'nothing-play-btn' : ''
+                                      ? 'active-white'
+                                      : 'dim-grey'
                                     }`}
-                                    onClick={handlePlayPause}
-                                    aria-label="Play or Pause"
-                                  >
-                                    {currentMedia.isPlaying ? (
-                                      <Pause size={13} fill="#050506" strokeWidth={2.5} />
-                                    ) : (
-                                      <Play
-                                        size={13}
-                                        fill="#050506"
-                                        strokeWidth={2.5}
-                                        style={{ marginLeft: 1 }}
-                                      />
-                                    )}
-                                  </button>
-                                </>
-                              )}
-                            </div>
-
-                            {/* Right Card: Focus Timer */}
-                            <div
-                              className="home-card focus-mini-card"
-                              onClick={() => setActiveTab('timer')}
-                              title="Focus sayacını aç"
-                            >
-                              <div className="home-card-meta">
-                                <strong className="home-card-big mono">
-                                  {formatTimerBig(timerSeconds)}
-                                </strong>
-                                <span className="home-card-sub">
-                                  {timerRunning ? 'Focus, running' : 'Focus, ready'}
-                                </span>
+                                />
+                                <div className="home-card-meta">
+                                  <strong className="home-card-big mono">
+                                    {pendingApproval ? 'Approval' : `${jobsToday}`}
+                                  </strong>
+                                  <span className="home-card-sub">
+                                    {pendingApproval ? 'needed now' : 'jobs today'}
+                                  </span>
+                                </div>
                               </div>
-                              <button
-                                type="button"
-                                className="circle-white-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  playRoboSound('tap', islandSettings.soundEffects !== false);
-                                  setTimerRunning((r) => !r);
+
+                              {/* Middle Card: Live Windows Media with crimson placeholder & ambient color */}
+                              <div
+                                className={`home-card media-mini-card ${musicAccent.hasColor ? 'tinted-media-card' : ''
+                                  } ${!currentMedia.hasSession ? 'is-nothing-playing' : ''} ${!currentMedia.hasSession && showMusicServicePicker
+                                    ? 'service-picker-open'
+                                    : ''
+                                  }`}
+                                onClick={() => {
+                                  if (!currentMedia.hasSession) {
+                                    playRoboSound('tap', islandSettings.soundEffects !== false);
+                                    setShowMusicServicePicker((p) => !p);
+                                  } else {
+                                    setActiveTab('music');
+                                  }
                                 }}
-                                aria-label="Start or Pause Focus"
+                                title={
+                                  !currentMedia.hasSession
+                                    ? 'Spotify veya YouTube Music başlatmak için tıkla'
+                                    : 'Müzik görünümünü aç'
+                                }
                               >
-                                {timerRunning ? (
-                                  <Pause size={14} fill="#050506" strokeWidth={2.5} />
+                                {!currentMedia.hasSession && showMusicServicePicker ? (
+                                  <div
+                                    className="music-service-picker-row"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      type="button"
+                                      className="music-service-logo-btn spotify-btn"
+                                      onClick={(e) => handleLaunchMusicService(e, 'spotify')}
+                                      title="Spotify Aç"
+                                    >
+                                      <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                                        <circle cx="12" cy="12" r="11" fill="#1ED760" />
+                                        <path
+                                          d="M16.9 10.6C13.9 8.8 8.9 8.6 6.1 9.5C5.6 9.6 5.1 9.4 5 8.9C4.9 8.4 5.1 7.9 5.6 7.8C8.9 6.8 14.4 7 17.9 9.1C18.3 9.3 18.5 9.9 18.2 10.3C18 10.7 17.4 10.9 16.9 10.6ZM16.8 13.5C16.6 13.9 16.1 14 15.7 13.7C13.2 12.2 9.4 11.7 6.5 12.6C6.1 12.7 5.6 12.5 5.5 12.1C5.4 11.7 5.6 11.2 6 11.1C9.4 10.1 13.6 10.6 16.5 12.4C16.9 12.6 17 13.1 16.8 13.5ZM15.5 16.3C15.3 16.6 14.9 16.7 14.6 16.5C12.4 15.2 9.7 14.9 6.6 15.6C6.3 15.7 5.9 15.5 5.8 15.1C5.7 14.8 5.9 14.4 6.3 14.3C9.8 13.5 12.8 13.8 15.3 15.3C15.6 15.5 15.7 16 15.5 16.3Z"
+                                          fill="#000000"
+                                        />
+                                      </svg>
+                                      <span>Spotify</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="music-service-logo-btn ytmusic-btn"
+                                      onClick={(e) => handleLaunchMusicService(e, 'ytmusic')}
+                                      title="YouTube Music Aç"
+                                    >
+                                      <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                                        <circle cx="12" cy="12" r="11" fill="#FF0033" />
+                                        <circle
+                                          cx="12"
+                                          cy="12"
+                                          r="6.2"
+                                          stroke="#FFFFFF"
+                                          strokeWidth="1.4"
+                                        />
+                                        <polygon points="10.4,9.3 15.2,12 10.4,14.7" fill="#FFFFFF" />
+                                      </svg>
+                                      <span>YT Music</span>
+                                    </button>
+                                  </div>
                                 ) : (
-                                  <Play
-                                    size={14}
-                                    fill="#050506"
-                                    strokeWidth={2.5}
-                                    style={{ marginLeft: 1 }}
-                                  />
+                                  <>
+                                    {currentMedia.thumbnail ? (
+                                      <img
+                                        src={currentMedia.thumbnail}
+                                        alt=""
+                                        className="mini-card-cover"
+                                      />
+                                    ) : (
+                                      <div className="mini-card-cover crimson-placeholder-cover" />
+                                    )}
+                                    <div className="home-card-meta truncate">
+                                      <strong className="home-card-title">
+                                        {currentMedia.title}
+                                      </strong>
+                                      {currentMedia.hasSession && (
+                                        <span className="home-card-sub">
+                                          {currentMedia.artist || 'Windows Media'}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className={`circle-white-btn ${!currentMedia.hasSession ? 'nothing-play-btn' : ''
+                                        }`}
+                                      onClick={handlePlayPause}
+                                      aria-label="Play or Pause"
+                                    >
+                                      {currentMedia.isPlaying ? (
+                                        <Pause size={13} fill="#050506" strokeWidth={2.5} />
+                                      ) : (
+                                        <Play
+                                          size={13}
+                                          fill="#050506"
+                                          strokeWidth={2.5}
+                                          style={{ marginLeft: 1 }}
+                                        />
+                                      )}
+                                    </button>
+                                  </>
                                 )}
-                              </button>
+                              </div>
+
+                              {/* Right Card: Focus Timer */}
+                              <div
+                                className="home-card focus-mini-card"
+                                onClick={() => setActiveTab('timer')}
+                                title="Focus sayacını aç"
+                              >
+                                <div className="home-card-meta">
+                                  <strong className="home-card-big mono">
+                                    {formatTimerBig(timerSeconds)}
+                                  </strong>
+                                  <span className="home-card-sub">
+                                    {timerRunning ? 'Focus, running' : 'Focus, ready'}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="circle-white-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    playRoboSound('tap', islandSettings.soundEffects !== false);
+                                    setTimerRunning((r) => !r);
+                                  }}
+                                  aria-label="Start or Pause Focus"
+                                >
+                                  {timerRunning ? (
+                                    <Pause size={14} fill="#050506" strokeWidth={2.5} />
+                                  ) : (
+                                    <Play
+                                      size={14}
+                                      fill="#050506"
+                                      strokeWidth={2.5}
+                                      style={{ marginLeft: 1 }}
+                                    />
+                                  )}
+                                </button>
+                              </div>
                             </div>
-                          </div>
                           </>
                         )}
                       </div>
@@ -4110,9 +4069,8 @@ export default function App() {
 
                           <div className="music-lyrics-box">
                             <p
-                              className={`lyric-line-active ${
-                                hasSyncedLyrics ? 'karaoke-active-line' : ''
-                              }`}
+                              className={`lyric-line-active ${hasSyncedLyrics ? 'karaoke-active-line' : ''
+                                }`}
                             >
                               {primaryLine}
                             </p>
@@ -4138,21 +4096,19 @@ export default function App() {
                               <div
                                 className="music-scrubber-fill"
                                 style={{
-                                  width: `${
-                                    currentMedia.duration > 0
-                                      ? Math.min(100, Math.max(0, (((isScrubbing && scrubPosition !== null ? scrubPosition : currentMedia.position) || 0) / currentMedia.duration) * 100))
-                                      : 0
-                                  }%`,
+                                  width: `${currentMedia.duration > 0
+                                    ? Math.min(100, Math.max(0, (((isScrubbing && scrubPosition !== null ? scrubPosition : currentMedia.position) || 0) / currentMedia.duration) * 100))
+                                    : 0
+                                    }%`,
                                 }}
                               />
                               <div
                                 className="music-scrubber-thumb"
                                 style={{
-                                  left: `${
-                                    currentMedia.duration > 0
-                                      ? Math.min(100, Math.max(0, (((isScrubbing && scrubPosition !== null ? scrubPosition : currentMedia.position) || 0) / currentMedia.duration) * 100))
-                                      : 0
-                                  }%`,
+                                  left: `${currentMedia.duration > 0
+                                    ? Math.min(100, Math.max(0, (((isScrubbing && scrubPosition !== null ? scrubPosition : currentMedia.position) || 0) / currentMedia.duration) * 100))
+                                    : 0
+                                    }%`,
                                 }}
                               />
                             </div>
@@ -4448,9 +4404,8 @@ export default function App() {
                               return (
                                 <div
                                   key={m}
-                                  className={`ruler-tick-wrap ${isMajor ? 'major' : 'minor'} ${
-                                    isSelected ? 'selected' : ''
-                                  }`}
+                                  className={`ruler-tick-wrap ${isMajor ? 'major' : 'minor'} ${isSelected ? 'selected' : ''
+                                    }`}
                                 >
                                   <span className="ruler-tick-line" />
                                 </div>
@@ -4671,6 +4626,7 @@ export default function App() {
                         onDeleteEvent={handleDeleteAgendaEvent}
                       />
                     )}
+                    {activeTab === 'perf' && islandMode === 'expanded' && <PerfMonitorTab />}
                     {/* ============================================================
                         11. MAIL TAB
                         ============================================================ */}
@@ -4679,17 +4635,17 @@ export default function App() {
                         <section className="mail-main-panel">
                           <header className="mail-main-header">
                             <nav className="mail-folder-list" aria-label="Posta kategorileri">
-                            {MAIL_FOLDERS.map((folder) => {
-                              const FolderIcon = folder.icon;
-                              const count = Number(mailCounts[folder.countKey]) || 0;
-                              return (
-                                <button key={folder.id} type="button" className={`mail-folder-btn ${mailCategory === folder.id ? 'active' : ''}`} onClick={() => setMailCategory(folder.id)} aria-current={mailCategory === folder.id ? 'page' : undefined}>
-                                  <FolderIcon size={15} strokeWidth={1.9} />
-                                  <span>{folder.label}</span>
-                                  {count > 0 && <small>{count > 99 ? '99+' : count}</small>}
-                                </button>
-                              );
-                            })}
+                              {MAIL_FOLDERS.map((folder) => {
+                                const FolderIcon = folder.icon;
+                                const count = Number(mailCounts[folder.countKey]) || 0;
+                                return (
+                                  <button key={folder.id} type="button" className={`mail-folder-btn ${mailCategory === folder.id ? 'active' : ''}`} onClick={() => setMailCategory(folder.id)} aria-current={mailCategory === folder.id ? 'page' : undefined}>
+                                    <FolderIcon size={15} strokeWidth={1.9} />
+                                    <span>{folder.label}</span>
+                                    {count > 0 && <small>{count > 99 ? '99+' : count}</small>}
+                                  </button>
+                                );
+                              })}
                             </nav>
                             <div className="mail-header-actions">
                               <span className={`mail-connection-state ${mailIsConnected ? 'connected' : ''}`} title={mailIsConnected ? 'Gmail bağlı' : 'Gmail bağlı değil'} aria-label={mailIsConnected ? 'Gmail bağlı' : 'Gmail bağlı değil'}><i /></span>
@@ -4808,9 +4764,8 @@ export default function App() {
 
       {/* Detached Top-Bezel Circular Media Droplet when Focus Timer + Media are both active */}
       <div
-        className={`detached-media-droplet ${
-          islandMode === 'focus-bar-media' ? 'is-visible' : ''
-        }`}
+        className={`detached-media-droplet ${islandMode === 'focus-bar-media' ? 'is-visible' : ''
+          }`}
         style={{ left: 418, width: 48, height: 26 }}
         onClick={() => {
           setActiveTab('music');
@@ -4826,9 +4781,8 @@ export default function App() {
 
       {/* Modern Sleek Global Tooltip */}
       <div
-        className={`modern-tooltip-portal is-${tooltipState.placement} ${
-          tooltipState.visible ? 'is-visible' : 'is-hidden'
-        }`}
+        className={`modern-tooltip-portal is-${tooltipState.placement} ${tooltipState.visible ? 'is-visible' : 'is-hidden'
+          }`}
         style={{
           left: Math.max(70, Math.min(window.innerWidth - 70, tooltipState.x)),
           top: tooltipState.y,

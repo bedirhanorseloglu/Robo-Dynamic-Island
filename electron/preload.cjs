@@ -76,6 +76,8 @@ contextBridge.exposeInMainWorld('twocode', {
   openNotificationTarget: (target) => ipcRenderer.invoke('open-notification-target', target),
   captureScreen: () => ipcRenderer.invoke('capture-screen'),
   getSystemStats: () => ipcRenderer.invoke('get-system-stats'),
+  getPerfMetrics: () => ipcRenderer.invoke('get-perf-metrics'),
+  openTaskMgrPerf: (section) => ipcRenderer.invoke('open-taskmgr-perf', section),
   onAgentEvent: (cb) => {
     const listener = (_event, data) => cb(data);
     ipcRenderer.on('agent-event', listener);
@@ -120,5 +122,15 @@ contextBridge.exposeInMainWorld('twocode', {
     return () => ipcRenderer.removeListener('google-data-update', listener);
   },
   askRobo: (payload) => ipcRenderer.invoke('ask-robo', payload),
+  onAppContext: (cb) => {
+    const listener = (_event, data) => cb(data);
+    ipcRenderer.on('app-context', listener);
+    return () => ipcRenderer.removeListener('app-context', listener);
+  },
+  onLiveActivity: (cb) => {
+    const listener = (_event, data) => cb(data);
+    ipcRenderer.on('live-activity', listener);
+    return () => ipcRenderer.removeListener('live-activity', listener);
+  },
   quitApp: () => ipcRenderer.send('quit-app'),
 });

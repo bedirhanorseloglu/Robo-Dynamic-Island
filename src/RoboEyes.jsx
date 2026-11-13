@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { playRoboSound } from './sounds';
 
-export default function RoboEyes({ mood = 'normal', reaction = null, active = true, onPoke, size = 'normal', batteryPercent, batteryCharging = false }) {
+export default function RoboEyes({ mood = 'normal', reaction = null, active = true, trackCursor = true, onPoke, size = 'normal', batteryPercent, batteryCharging = false }) {
   const [blink, setBlink] = useState(false);
   const [wakePhase, setWakePhase] = useState('closed'); // 'closed' | 'flutter' | 'look-left' | 'look-right' | 'happy' | 'done'
   const [lookOffset, setLookOffset] = useState({ x: 0, y: 0 });
@@ -15,26 +15,14 @@ export default function RoboEyes({ mood = 'normal', reaction = null, active = tr
   const lastLookUpdateRef = useRef(0);
   const hasWokenRef = useRef(false);
 
-  // Run the wake-up sequence only once, when a visible Robo instance first becomes active.
+  // Smoothly open eyes once when a visible Robo instance first becomes active.
   useEffect(() => {
     if (!active || hasWokenRef.current) return undefined;
-    const t1 = setTimeout(() => setWakePhase('flutter'), 260);
-    const t2 = setTimeout(() => setWakePhase('closed'), 460);
-    const t3 = setTimeout(() => setWakePhase('look-left'), 620);
-    const t4 = setTimeout(() => setWakePhase('look-right'), 940);
-    const t5 = setTimeout(() => setWakePhase('happy'), 1240);
-    const t6 = setTimeout(() => {
+    const t = setTimeout(() => {
       setWakePhase('done');
       hasWokenRef.current = true;
-    }, 1750);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-      clearTimeout(t5);
-      clearTimeout(t6);
-    };
+    }, 260);
+    return () => clearTimeout(t);
   }, [active]);
 
   useEffect(() => () => {
@@ -44,7 +32,7 @@ export default function RoboEyes({ mood = 'normal', reaction = null, active = tr
 
   // A single lightweight blink timer runs only for the currently visible Robo instance.
   useEffect(() => {
-    if (!active || mood === 'music') {
+    if (!active || mood === 'music' || mood === 'dnd-sleep') {
       setBlink(false);
       return undefined;
     }
@@ -59,9 +47,9 @@ export default function RoboEyes({ mood = 'normal', reaction = null, active = tr
     };
   }, [active, mood]);
 
-  // Subtle eye tracking toward cursor
+  // Subtle eye tracking toward cursor (disabled in idle to avoid background re-renders)
   useEffect(() => {
-    if (!active) return undefined;
+    if (!active || !trackCursor) return undefined;
     const handleMove = (e) => {
       if (!containerRef.current) return;
       const now = performance.now();
@@ -123,11 +111,17 @@ export default function RoboEyes({ mood = 'normal', reaction = null, active = tr
   const wakeShiftY = wakePhase === 'closed' ? 1.5 : lookOffset.y;
 
   const isHeartEyes = activeMood === 'inlove' || activeMood === 'love';
+  const isLowBattery = !batteryCharging && Number.isFinite(batteryPercent) && batteryPercent <= 20;
+  const isFocus = activeMood === 'focus-arc' || activeMood === 'focus';
+  const isDndSleep = activeMood === 'dnd-sleep';
+  const isTurbo = activeMood === 'turbo';
+  const isThinking = activeMood === 'thinking' || activeReaction === 'thinking';
+  const isBellAlert = activeReaction === 'notification';
 
   return (
     <div
       ref={containerRef}
-      className={`robo-eyes-wrap ${activeMood} ${activeReaction ? `reaction-${activeReaction}` : ''} ${!active ? 'is-inactive' : ''} ${batteryCharging ? 'is-charging' : ''} ${!batteryCharging && Number.isFinite(batteryPercent) && batteryPercent <= 20 ? 'is-low-battery' : ''}`}
+      className={`robo-eyes-wrap ${activeMood} ${activeReaction ? `reaction-${activeReaction}` : ''} ${!active ? 'is-inactive' : ''} ${batteryCharging ? 'is-charging' : ''} ${isLowBattery ? 'is-low-battery' : ''}`}
       onClick={handleClick}
       title="Robo"
       style={{
@@ -142,6 +136,31 @@ export default function RoboEyes({ mood = 'normal', reaction = null, active = tr
             style={{ width: `${Math.min(100, Math.max(0, Number(batteryPercent) || 0))}%` }}
           />
         </span>
+      )}
+      {isLowBattery && (
+        <span className="robo-low-battery" aria-hidden="true" title={`Düşük pil · ${batteryPercent}%`}>
+          <span className="robo-low-battery-bar" />
+        </span>
+      )}
+      {isFocus && (
+        <svg className="robo-prop-glasses" viewBox="0 0 38 14" aria-hidden="true">
+          <rect x="1.5" y="2" width="14" height="10" rx="3.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <rect x="22.5" y="2" width="14" height="10" rx="3.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M15.5 6.2h7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      )}
+      {isDndSleep && (
+        <span className="robo-prop-sleep" aria-hidden="true">zZ</span>
+      )}
+      {isThinking && (
+        <span className="robo-prop-thinking" aria-hidden="true">
+          <i /><i /><i />
+        </span>
+      )}
+      {isBellAlert && (
+        <svg className="robo-prop-bell" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 2a4 4 0 0 0-4 4v2.6L2.8 10.4a.6.6 0 0 0 .5.9h9.4a.6.6 0 0 0 .5-.9L12 8.6V6a4 4 0 0 0-4-4zm-1.4 10.5a1.5 1.5 0 0 0 2.8 0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       )}
       {isHeartEyes ? (
         <>
