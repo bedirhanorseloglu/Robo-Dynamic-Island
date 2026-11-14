@@ -83,7 +83,7 @@ const MODE_DIMENSIONS = {
   idle: { bodyWidth: 130, height: 20, earRadius: 8, bottomRadius: 10, droplet: 0 },
   'mini-progress': { bodyWidth: 268, height: 12, earRadius: 7, bottomRadius: 6, droplet: 0 },
   hud: { bodyWidth: 312, height: 36, earRadius: 0, bottomRadius: 18, droplet: 0 },
-  battery: { bodyWidth: 356, height: 58, earRadius: 14, bottomRadius: 24, droplet: 0 },
+  battery: { bodyWidth: 366, height: 60, earRadius: 0, bottomRadius: 24, droplet: 0 },
   'notif-toast': { bodyWidth: 396, height: 60, earRadius: 0, bottomRadius: 24, droplet: 0 },
   'music-bar': { bodyWidth: 350, height: 26, earRadius: 9, bottomRadius: 13, droplet: 0 },
   'focus-bar': { bodyWidth: 110, height: 26, earRadius: 8, bottomRadius: 13, droplet: 0 },

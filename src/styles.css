@@ -83,7 +83,10 @@ body,
 .notch-morph-shell {
   position: relative;
   overflow: hidden;
-  background: #000000;
+  --shell-border-tint: 255, 255, 255;
+  background: linear-gradient(180deg, #000000 0%, #11141d 22%, #0b0d13 100%);
+  border: none;
+  box-shadow: inset 0 10px 14px -8px #000000, 0 10px 28px rgba(0, 0, 0, 0.52);
   transition:
     width 0.27s cubic-bezier(0.22, 1, 0.36, 1),
     height 0.27s cubic-bezier(0.22, 1, 0.36, 1),
@@ -92,11 +95,36 @@ body,
   will-change: width, height;
 }
 
+.notch-morph-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  padding-top: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(var(--shell-border-tint), 0.025) 30%,
+    rgba(var(--shell-border-tint), 0.095) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 40;
+}
+
 .notch-morph-shell.state-idle {
   width: 146px;
   height: 20px;
   border-radius: 0 0 10px 10px;
   cursor: pointer;
+  background: linear-gradient(180deg, #000000 0%, #10131b 38%, #0b0d12 100%);
+  border-color: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 6px 10px -6px #000000, 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
 .notch-morph-shell.state-mini-progress {
@@ -105,12 +133,14 @@ body,
   border-radius: 0 0 6px 6px;
   cursor: pointer;
   background:
-    radial-gradient(ellipse 96% 110% at 50% 116%,
-      rgba(var(--music-accent-rgb, 110, 142, 185), 0.56) 0%,
-      rgba(var(--music-accent-rgb, 110, 142, 185), 0.22) 56%,
-      #000000 90%),
-    #000000;
-  box-shadow: inset 0 -1px 5px rgba(var(--music-accent-rgb, 110, 142, 185), 0.4);
+    radial-gradient(ellipse 90% 100% at 50% 116%,
+      rgba(var(--music-accent-rgb, 110, 142, 185), 0.32) 0%,
+      rgba(var(--music-accent-rgb, 110, 142, 185), 0.1) 54%,
+      transparent 86%),
+    linear-gradient(180deg, #13161f 0%, #0b0d13 100%);
+  box-shadow:
+    inset 0 -1px 4px rgba(var(--music-accent-rgb, 110, 142, 185), 0.22),
+    0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
 .notch-morph-shell.state-battery {
@@ -118,24 +148,26 @@ body,
   height: 60px;
   border-radius: 0 0 24px 24px;
   cursor: pointer;
-  border: 1px solid rgba(255, 69, 58, 0.28);
+  --shell-border-tint: 255, 69, 58;
   background:
-    linear-gradient(to top, rgba(255, 69, 58, 0.22) 0%, rgba(225, 29, 72, 0.06) 46%, transparent 88%),
-    #050508;
+    linear-gradient(to top, rgba(255, 69, 58, 0.16) 0%, rgba(225, 29, 72, 0.04) 44%, transparent 82%),
+    linear-gradient(180deg, #000000 0%, #11141d 24%, #0b0d13 100%);
   box-shadow:
-    inset 0 -1px 10px rgba(255, 69, 58, 0.22),
-    0 8px 24px rgba(0, 0, 0, 0.45);
+    inset 0 10px 14px -8px #000000,
+    inset 0 -1px 8px rgba(255, 69, 58, 0.16),
+    0 10px 26px rgba(0, 0, 0, 0.52);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .notch-morph-shell.state-battery.is-charging {
-  border: 1px solid rgba(48, 209, 88, 0.28);
+  --shell-border-tint: 48, 209, 88;
   background:
-    linear-gradient(to top, rgba(48, 209, 88, 0.22) 0%, rgba(16, 185, 129, 0.06) 46%, transparent 88%),
-    #050508;
+    linear-gradient(to top, rgba(48, 209, 88, 0.16) 0%, rgba(16, 185, 129, 0.04) 44%, transparent 82%),
+    linear-gradient(180deg, #000000 0%, #11141d 24%, #0b0d13 100%);
   box-shadow:
-    inset 0 -1px 10px rgba(48, 209, 88, 0.22),
-    0 8px 24px rgba(0, 0, 0, 0.45);
+    inset 0 10px 14px -8px #000000,
+    inset 0 -1px 8px rgba(48, 209, 88, 0.16),
+    0 10px 26px rgba(0, 0, 0, 0.52);
 }
 
 .notch-morph-shell.state-hud {
@@ -143,8 +175,9 @@ body,
   height: 36px;
   border-radius: 0 0 18px 18px;
   cursor: pointer;
-  background: #000000;
-  box-shadow: none;
+  background: linear-gradient(180deg, #000000 0%, #11141d 26%, #0b0d13 100%);
+  border-color: rgba(255, 255, 255, 0.055);
+  box-shadow: inset 0 8px 12px -7px #000000, 0 8px 24px rgba(0, 0, 0, 0.52);
 }
 
 .notch-morph-shell.state-notif-toast {
@@ -166,12 +199,14 @@ body,
   border-radius: 0 0 13px 13px;
   cursor: pointer;
   background:
-    radial-gradient(ellipse 94% 92% at 50% 114%,
-      rgba(var(--music-accent-rgb, 110, 142, 185), 0.65) 0%,
-      rgba(var(--music-accent-rgb, 110, 142, 185), 0.25) 54%,
-      #000000 90%),
-    #000000;
-  box-shadow: inset 0 -1.5px 8px rgba(var(--music-accent-rgb, 110, 142, 185), 0.42);
+    radial-gradient(ellipse 90% 88% at 50% 114%,
+      rgba(var(--music-accent-rgb, 110, 142, 185), 0.34) 0%,
+      rgba(var(--music-accent-rgb, 110, 142, 185), 0.11) 52%,
+      transparent 84%),
+    linear-gradient(180deg, #13161f 0%, #0b0d13 100%);
+  box-shadow:
+    inset 0 -1px 5px rgba(var(--music-accent-rgb, 110, 142, 185), 0.22),
+    0 8px 22px rgba(0, 0, 0, 0.48);
 }
 
 .notch-morph-shell.state-focus-bar {
@@ -180,12 +215,14 @@ body,
   border-radius: 0 0 13px 13px;
   cursor: pointer;
   background:
-    radial-gradient(ellipse 88% 85% at 50% 112%,
-      rgba(176, 133, 245, 0.45) 0%,
-      rgba(100, 60, 180, 0.2) 56%,
-      #000000 88%),
-    #000000;
-  box-shadow: inset 0 -1.5px 8px rgba(136, 84, 218, 0.44);
+    radial-gradient(ellipse 84% 82% at 50% 112%,
+      rgba(176, 133, 245, 0.28) 0%,
+      rgba(100, 60, 180, 0.11) 54%,
+      transparent 84%),
+    linear-gradient(180deg, #13161f 0%, #0b0d13 100%);
+  box-shadow:
+    inset 0 -1px 5px rgba(136, 84, 218, 0.24),
+    0 8px 22px rgba(0, 0, 0, 0.48);
 }
 
 .notch-morph-shell.state-focus-bar-media {
@@ -194,12 +231,14 @@ body,
   border-radius: 0 0 13px 13px;
   cursor: pointer;
   background:
-    radial-gradient(ellipse 88% 85% at 50% 112%,
-      rgba(176, 133, 245, 0.45) 0%,
-      rgba(100, 60, 180, 0.2) 56%,
-      #000000 88%),
-    #000000;
-  box-shadow: inset 0 -1.5px 8px rgba(136, 84, 218, 0.44);
+    radial-gradient(ellipse 84% 82% at 50% 112%,
+      rgba(176, 133, 245, 0.28) 0%,
+      rgba(100, 60, 180, 0.11) 54%,
+      transparent 84%),
+    linear-gradient(180deg, #13161f 0%, #0b0d13 100%);
+  box-shadow:
+    inset 0 -1px 5px rgba(136, 84, 218, 0.24),
+    0 8px 22px rgba(0, 0, 0, 0.48);
 }
 
 .notch-morph-shell.state-expanded {
@@ -207,57 +246,63 @@ body,
   height: 256px;
   border-radius: 0 0 24px 24px;
   background:
-    radial-gradient(ellipse 92% 54% at 50% 106%,
-      rgba(var(--music-accent-rgb, 190, 32, 68), 0.56) 0%,
-      rgba(var(--music-accent-rgb, 190, 32, 68), 0.24) 52%,
-      #000000 84%),
-    #000000;
-  box-shadow: inset 0 -1.5px 12px rgba(var(--music-accent-rgb, 190, 32, 68), 0.34);
+    radial-gradient(ellipse 88% 50% at 50% 106%,
+      rgba(var(--music-accent-rgb, 190, 32, 68), 0.28) 0%,
+      rgba(var(--music-accent-rgb, 190, 32, 68), 0.1) 50%,
+      transparent 80%),
+    linear-gradient(180deg, #000000 0%, #12151f 16%, #0c0e14 100%);
+  box-shadow:
+    inset 0 10px 14px -8px #000000,
+    inset 0 -1px 8px rgba(var(--music-accent-rgb, 190, 32, 68), 0.18),
+    0 18px 42px rgba(0, 0, 0, 0.56);
 }
 
-/* Ambient cover-photo glow on Expanded HOME & MUSIC tabs (media_1794019770615_3d70e18b.jpg) */
+/* Ambient cover-photo glow on Expanded HOME & MUSIC tabs */
 .notch-morph-shell.state-expanded.mode-home.has-cover-color,
 .notch-morph-shell.state-expanded.mode-music.has-cover-color {
   background:
-    radial-gradient(ellipse 94% 56% at 50% 106%,
-      rgba(var(--music-accent-rgb, 190, 32, 68), 0.56) 0%,
-      rgba(var(--music-accent-rgb, 190, 32, 68), 0.24) 52%,
-      #000000 84%),
-    #000000;
-  box-shadow: inset 0 -1.5px 12px rgba(var(--music-accent-rgb, 190, 32, 68), 0.34);
+    radial-gradient(ellipse 90% 52% at 50% 106%,
+      rgba(var(--music-accent-rgb, 190, 32, 68), 0.3) 0%,
+      rgba(var(--music-accent-rgb, 190, 32, 68), 0.11) 50%,
+      transparent 80%),
+    linear-gradient(180deg, #000000 0%, #12151f 16%, #0c0e14 100%);
+  box-shadow:
+    inset 0 10px 14px -8px #000000,
+    inset 0 -1px 8px rgba(var(--music-accent-rgb, 190, 32, 68), 0.2),
+    0 18px 42px rgba(0, 0, 0, 0.56);
 }
 
 /* Burgundy bottom glow when customizing HOME clock */
 .notch-morph-shell.state-expanded.customizing-clock {
   background:
-    radial-gradient(ellipse 86% 48% at 50% 105%,
-      rgba(145, 22, 42, 0.42) 0%,
-      rgba(65, 10, 20, 0.3) 52%,
-      #000000 80%),
-    #000000;
+    radial-gradient(ellipse 84% 46% at 50% 105%,
+      rgba(145, 22, 42, 0.28) 0%,
+      rgba(65, 10, 20, 0.14) 52%,
+      transparent 78%),
+    linear-gradient(180deg, #000000 0%, #12151f 16%, #0c0e14 100%);
 }
 
 /* Deep Midnight-Blue bottom glow on CODEX tab */
 .notch-morph-shell.state-expanded.mode-code {
   background:
-    radial-gradient(ellipse 86% 52% at 50% 106%,
-      rgba(32, 74, 158, 0.48) 0%,
-      rgba(14, 32, 75, 0.32) 52%,
-      #000000 80%),
-    #000000;
+    radial-gradient(ellipse 84% 48% at 50% 106%,
+      rgba(32, 74, 158, 0.28) 0%,
+      rgba(14, 32, 75, 0.14) 52%,
+      transparent 78%),
+    linear-gradient(180deg, #000000 0%, #12151f 16%, #0c0e14 100%);
 }
 
 /* Dynamic cover-art glow on MUSIC tab when cover color is extracted */
 .notch-morph-shell.state-expanded.mode-music {
   background:
-    radial-gradient(ellipse 88% 54% at 62% 106%,
-      rgba(var(--music-accent-rgb, 80, 90, 110), 0.42) 0%,
-      rgba(var(--music-accent-rgb, 80, 90, 110), 0.16) 52%,
-      #000000 82%),
-    #000000;
+    radial-gradient(ellipse 86% 50% at 62% 106%,
+      rgba(var(--music-accent-rgb, 80, 90, 110), 0.26) 0%,
+      rgba(var(--music-accent-rgb, 80, 90, 110), 0.09) 50%,
+      transparent 80%),
+    linear-gradient(180deg, #000000 0%, #12151f 16%, #0c0e14 100%);
 }
 
-/* Pure black background when dragging files over the island (media_1794049683895_d176ec76.jpg) */
+/* Pure black background when dragging files over the island */
 .notch-morph-shell.state-expanded.is-file-drop-active {
   background: #000000 !important;
   box-shadow: none !important;
@@ -278,8 +323,11 @@ body,
   height: 100%;
   min-height: 172px;
   border-radius: 26px;
-  background: #0e0e13;
-  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1.5px solid rgba(255, 255, 255, 0.11);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -327,46 +375,46 @@ body,
   letter-spacing: -0.01em;
 }
 
-/* Pure black on TRAY, CLIPS, NOTE, MAIL tabs */
+/* Dark glass on TRAY, CLIPS, NOTE, MAIL tabs */
 .notch-morph-shell.state-expanded.mode-tray,
 .notch-morph-shell.state-expanded.mode-clips,
 .notch-morph-shell.state-expanded.mode-notes,
 .notch-morph-shell.state-expanded.mode-inbox {
   background:
     radial-gradient(ellipse 84% 36% at 50% 106%,
-      rgba(60, 60, 68, 0.2) 0%,
-      #000000 76%),
-    #000000;
+      rgba(86, 104, 138, 0.14) 0%,
+      transparent 74%),
+    linear-gradient(180deg, #000000 0%, #12151f 16%, #0c0e14 100%);
 }
 
 /* Subtle dark glow on ROBO tab */
 .notch-morph-shell.state-expanded.mode-robo {
   background:
     radial-gradient(ellipse 84% 40% at 50% 105%,
-      rgba(45, 45, 55, 0.28) 0%,
-      #000000 78%),
-    #000000;
+      rgba(68, 92, 132, 0.18) 0%,
+      transparent 76%),
+    linear-gradient(180deg, #000000 0%, #12151f 16%, #0c0e14 100%);
 }
 
 /* Deep Violet/Purple bottom glow on FOCUS & MODES tabs */
 .notch-morph-shell.state-expanded.mode-timer,
 .notch-morph-shell.state-expanded.mode-sleep {
   background:
-    radial-gradient(ellipse 88% 55% at 50% 106%,
-      rgba(102, 48, 178, 0.52) 0%,
-      rgba(48, 20, 92, 0.34) 55%,
-      #000000 82%),
-    #000000;
+    radial-gradient(ellipse 86% 52% at 50% 106%,
+      rgba(102, 48, 178, 0.3) 0%,
+      rgba(48, 20, 92, 0.14) 54%,
+      transparent 80%),
+    linear-gradient(180deg, #000000 0%, #12151f 16%, #0c0e14 100%);
 }
 
 /* Deep Ocean Teal/Cyan bottom glow on AGENDA tab */
 .notch-morph-shell.state-expanded.mode-cal {
   background:
-    radial-gradient(ellipse 88% 55% at 50% 106%,
-      rgba(18, 98, 142, 0.54) 0%,
-      rgba(8, 44, 68, 0.34) 55%,
-      #000000 82%),
-    #000000;
+    radial-gradient(ellipse 86% 52% at 50% 106%,
+      rgba(18, 98, 142, 0.3) 0%,
+      rgba(8, 44, 68, 0.14) 54%,
+      transparent 80%),
+    linear-gradient(180deg, #000000 0%, #12151f 16%, #0c0e14 100%);
 }
 
 /* Smooth cross-fade & spring scale for each internal morph layer */
@@ -731,12 +779,12 @@ body,
   padding: 0 22px;
   --hud-accent: 115, 190, 255;
   background:
-    radial-gradient(ellipse 94% 92% at 50% 114%,
-      rgba(var(--hud-accent), 0.65) 0%,
-      rgba(var(--hud-accent), 0.25) 54%,
-      #000000 90%),
-    #000000;
-  box-shadow: inset 0 -1.5px 8px rgba(var(--hud-accent), 0.42);
+    radial-gradient(ellipse 88% 85% at 50% 118%,
+      rgba(var(--hud-accent), 0.24) 0%,
+      rgba(var(--hud-accent), 0.08) 52%,
+      transparent 84%),
+    linear-gradient(180deg, #13161f 0%, #0b0d13 100%);
+  box-shadow: inset 0 -1px 4px rgba(var(--hud-accent), 0.2);
 }
 
 .layer-hud:has(.hud-notch-fill.is-brightness) {
@@ -747,6 +795,33 @@ body,
   --hud-accent: 105, 216, 194;
   justify-content: center;
   padding: 0 14px;
+}
+
+.layer-hud.is-ghelper:has(.cat-backlight) {
+  --hud-accent: 255, 179, 64;
+}
+
+.layer-hud.is-ghelper:has(.cat-backlight.is-off) {
+  --hud-accent: 142, 148, 162;
+}
+
+.layer-hud.is-ghelper:has(.cat-mic) {
+  --hud-accent: 48, 209, 88;
+}
+
+.layer-hud.is-ghelper:has(.cat-mic .is-mic-muted) {
+  --hud-accent: 255, 69, 58;
+}
+
+.layer-hud.is-ghelper:has(.cat-mode),
+.layer-hud.is-ghelper:has(.cat-gpu) {
+  background:
+    radial-gradient(ellipse 88% 85% at 50% 118%,
+      color-mix(in srgb, var(--hud-mode-color, #38a6ff) 24%, transparent) 0%,
+      color-mix(in srgb, var(--hud-mode-color, #38a6ff) 8%, transparent) 52%,
+      transparent 84%),
+    linear-gradient(180deg, #13161f 0%, #0b0d13 100%);
+  box-shadow: inset 0 -1px 4px color-mix(in srgb, var(--hud-mode-color, #38a6ff) 22%, transparent);
 }
 
 .hud-ghelper-wrap {
@@ -825,19 +900,19 @@ body,
 }
 
 .notch-morph-shell.state-hud:has(.cat-mode) {
-  border-color: color-mix(in srgb, var(--hud-mode-color, #38a6ff) 28%, rgba(255, 255, 255, 0.1));
+  border-color: color-mix(in srgb, var(--hud-mode-color, #38a6ff) 22%, rgba(255, 255, 255, 0.065));
   background:
-    linear-gradient(to top, color-mix(in srgb, var(--hud-mode-color, #38a6ff) 20%, transparent) 0%, transparent 72%),
-    #000000;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.72);
+    radial-gradient(ellipse 88% 85% at 50% 118%, color-mix(in srgb, var(--hud-mode-color, #38a6ff) 22%, transparent) 0%, transparent 76%),
+    linear-gradient(180deg, #13161f 0%, #0b0d13 100%);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.54);
 }
 
 .notch-morph-shell.state-hud:has(.cat-gpu) {
-  border-color: color-mix(in srgb, var(--hud-mode-color, #00b874) 28%, rgba(255, 255, 255, 0.1));
+  border-color: color-mix(in srgb, var(--hud-mode-color, #00b874) 22%, rgba(255, 255, 255, 0.065));
   background:
-    linear-gradient(to top, color-mix(in srgb, var(--hud-mode-color, #00b874) 20%, transparent) 0%, transparent 72%),
-    #000000;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.72);
+    radial-gradient(ellipse 88% 85% at 50% 118%, color-mix(in srgb, var(--hud-mode-color, #00b874) 22%, transparent) 0%, transparent 76%),
+    linear-gradient(180deg, #13161f 0%, #0b0d13 100%);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.54);
 }
 
 .hud-ghelper-info {
@@ -863,9 +938,9 @@ body,
 .hud-ghelper-val {
   font-size: 13.5px;
   font-weight: 700;
-  color: #ffffff;
+  color: #f6f8fc;
   letter-spacing: -0.01em;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 10px rgba(255, 255, 255, 0.12), 0 1px 4px rgba(0, 0, 0, 0.55);
 }
 
 .hud-level-dots {
@@ -917,16 +992,15 @@ body,
   height: 36px;
   border-radius: 0 0 18px 18px;
   cursor: pointer;
+  border-color: rgba(255, 255, 255, 0.065) !important;
   background:
-    radial-gradient(ellipse 90% 110% at 50% 120%,
-      color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 22%, transparent) 0%,
-      rgba(12, 14, 18, 0.95) 54%,
-      #000000 95%),
-    #000000 !important;
+    radial-gradient(ellipse 88% 105% at 50% 120%,
+      color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 18%, transparent) 0%,
+      transparent 72%),
+    linear-gradient(180deg, #13161f 0%, #0b0d13 100%) !important;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
-    inset 0 -1.5px 6px color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 40%, transparent),
-    0 10px 28px -4px color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 35%, transparent) !important;
+    inset 0 -1px 4px color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 24%, transparent),
+    0 10px 28px -4px color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 24%, transparent) !important;
   transition:
     width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
     height 0.28s cubic-bezier(0.16, 1, 0.3, 1),
@@ -1338,7 +1412,8 @@ body,
   flex: 1;
   height: 5px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
 
@@ -1750,6 +1825,10 @@ body,
   font-weight: 700;
 }
 
+.notif-card-body:first-child::before {
+  content: none;
+}
+
 .notif-card-delete {
   display: grid;
   place-items: center;
@@ -1973,10 +2052,10 @@ body,
 }
 
 .notif-toast-avatar.is-app-avatar {
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: none;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.045);
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22);
+  background: transparent;
+  box-shadow: none;
 }
 
 .notif-toast-profile-image,
@@ -2054,9 +2133,9 @@ body,
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 94% 92% at 50% 114%,
-      rgba(var(--notif-accent-rgb, 110, 142, 185), 0.28) 0%,
-      transparent 70%);
+    radial-gradient(ellipse 92% 90% at 50% 115%,
+      rgba(var(--notif-accent-rgb, 110, 142, 185), 0.22) 0%,
+      transparent 72%);
   pointer-events: none;
   animation: notifAmbientBreathe 4.5s ease-in-out infinite alternate;
   z-index: 0;
@@ -3683,8 +3762,16 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
 
 .home-view.is-clock-customizing {
   justify-content: space-between;
-  gap: 0;
-  padding-top: 10px;
+  gap: 4px;
+  padding-top: 0;
+}
+
+.home-view.is-clock-customizing .hero-clock:not(.focus-size) {
+  flex: 1 1 0;
+  min-height: 0;
+  margin: 0;
+  line-height: 0.9;
+  overflow: visible;
 }
 
 .hero-clock {
@@ -3721,6 +3808,19 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 1.05;
+  padding: 0.08em 0.1em;
+  margin: -0.08em -0.1em;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--clock-glass-color, #ffffff) 92%, #ffffff 8%) 0%,
+    var(--clock-glass-color, #ffffff) 52%,
+    color-mix(in srgb, var(--clock-glass-color, #ffffff) 68%, rgba(18, 22, 32, 0.85)) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.36));
 }
 
 .hero-clock-colon {
@@ -3741,6 +3841,12 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   width: 0.16em;
   height: 0.16em;
   border-radius: 50%;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--clock-glass-color, #ffffff) 92%, #ffffff 8%) 0%,
+    color-mix(in srgb, var(--clock-glass-color, #ffffff) 68%, rgba(18, 22, 32, 0.85)) 100%
+  );
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .hero-clock.focus-size .hero-clock-colon i {
@@ -3755,17 +3861,28 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   font-size: 0.2em;
   font-weight: 700;
   letter-spacing: 0.08em;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--clock-glass-color, #ffffff) 92%, #ffffff 8%) 0%,
+    color-mix(in srgb, var(--clock-glass-color, #ffffff) 68%, rgba(18, 22, 32, 0.85)) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .clock-customizer-panel {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 8px 11px;
   border: 1px solid rgba(255, 255, 255, 0.075);
   border-radius: 17px;
-  background: linear-gradient(145deg, rgba(28, 29, 35, 0.78), rgba(13, 14, 18, 0.82));
+  background: linear-gradient(145deg, rgba(28, 29, 35, 0.88), rgba(13, 14, 18, 0.92));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 10px 28px rgba(0, 0, 0, 0.18);
 }
 
@@ -4139,20 +4256,21 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   min-width: 0;
   overflow: hidden;
   height: 54px;
-  background: rgba(14, 10, 12, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24);
   border-radius: 16px;
   padding: 8px 12px;
   display: flex;
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.18s ease;
 }
 
 .home-card:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(24, 18, 22, 0.88);
+  border-color: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .job-status-square {
@@ -4188,6 +4306,11 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  background: linear-gradient(180deg, #ffffff 0%, #e6ebf4 55%, #b4bfd1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
 }
 
 .home-card-big.mono {
@@ -4236,14 +4359,18 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #ffffff;
-  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 4px 12px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 /* In resting "Nothing playing" state, match Image 1 (only crimson square + "Nothing playing"),
@@ -4567,8 +4694,9 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
 }
 
 .music-track-title {
-  color: #ffffff;
+  color: #f6f8fc;
   font-weight: 700;
+  text-shadow: 0 2px 10px rgba(255, 255, 255, 0.1), 0 2px 8px rgba(0, 0, 0, 0.45);
 }
 
 .music-track-dot,
@@ -7274,16 +7402,16 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   padding: 9px 14px;
   gap: 11px;
   border-radius: 18px;
-  border-color: rgba(255, 255, 255, 0.075);
-  background: rgba(15, 16, 19, 0.88);
-  box-shadow: 0 7px 20px rgba(0, 0, 0, 0.15);
+  border-color: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: 0 7px 20px rgba(0, 0, 0, 0.24);
   transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .notch-morph-shell.state-expanded.mode-home .home-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(22, 24, 28, 0.96);
+  border-color: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .notch-morph-shell.state-expanded.mode-home .home-card-big {
@@ -7335,7 +7463,9 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
 }
 
 .notch-morph-shell.state-expanded.mode-home .circle-white-btn:hover {
-  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 4px 14px rgba(0, 0, 0, 0.32);
 }
 
 .notch-morph-shell.state-expanded.mode-home .dock-shortcuts-pill {
@@ -7879,22 +8009,18 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   width: 44px;
   height: 44px;
   border-radius: 13px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 6px 16px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: transparent;
+  border: none;
+  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease;
 }
 
 .all-apps-cell:hover .all-apps-squircle {
   transform: scale(1.08);
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .all-apps-label {
@@ -8033,8 +8159,19 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   font-size: 42px;
   font-weight: 800;
   text-align: center;
-  line-height: 1;
+  line-height: 1.05;
+  padding: 2px 4px;
   letter-spacing: -0.04em;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--clock-glass-color, #ffffff) 92%, #ffffff 8%) 0%,
+    var(--clock-glass-color, #ffffff) 52%,
+    color-mix(in srgb, var(--clock-glass-color, #ffffff) 68%, rgba(18, 22, 32, 0.85)) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.34));
 }
 
 .cc-cards-row {
@@ -10089,26 +10226,31 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
 }
 
 .notification-history-item .notif-toast-avatar.is-app-avatar {
-  box-shadow: 0 0 15px rgba(var(--notif-accent-rgb, 43, 130, 246), .26);
+  box-shadow: none;
 }
 
 /* Ambient notification light follows the source app's brand or live icon color. */
 .notch-morph-shell.state-notif-toast {
   border: none;
+  --shell-border-tint: var(--notif-accent-rgb, 110, 142, 185);
   background:
-    radial-gradient(ellipse 94% 92% at 50% 114%,
-      rgba(var(--notif-accent-rgb, 110, 142, 185), 0.65) 0%,
-      rgba(var(--notif-accent-rgb, 110, 142, 185), 0.25) 54%,
-      #000000 90%),
-    #000000;
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  box-shadow: inset 0 -1.5px 8px rgba(var(--notif-accent-rgb, 110, 142, 185), 0.42);
+    radial-gradient(ellipse 90% 88% at 50% 114%,
+      rgba(var(--notif-accent-rgb, 110, 142, 185), 0.3) 0%,
+      rgba(var(--notif-accent-rgb, 110, 142, 185), 0.1) 52%,
+      transparent 84%),
+    linear-gradient(180deg, #000000 0%, #12151f 22%, #0b0d13 100%);
+  box-shadow:
+    inset 0 10px 14px -8px #000000,
+    inset 0 -1px 5px rgba(var(--notif-accent-rgb, 110, 142, 185), 0.22),
+    0 12px 28px rgba(0, 0, 0, 0.52);
 }
 
 .notch-morph-shell.state-notif-toast:hover {
   border: none;
-  box-shadow: inset 0 -1.5px 10px rgba(var(--notif-accent-rgb, 110, 142, 185), 0.54);
+  box-shadow:
+    inset 0 10px 14px -8px #000000,
+    inset 0 -1px 7px rgba(var(--notif-accent-rgb, 110, 142, 185), 0.34),
+    0 12px 30px rgba(0, 0, 0, 0.56);
 }
 
 .layer-notif-toast {

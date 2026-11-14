@@ -34,6 +34,7 @@ export default function HeroClock({
       style={{
         fontFamily,
         color,
+        '--clock-glass-color': color,
         fontSize: size === 'focus' ? undefined : `clamp(${Math.round(92 * scale)}px, ${(16.2 * scale).toFixed(2)}vw, ${Math.round(148 * scale)}px)`,
       }}
     >
@@ -41,8 +42,8 @@ export default function HeroClock({
         if (ch === ':') {
           return (
             <span key={idx} className="hero-clock-colon">
-              <i style={{ background: color }} />
-              <i style={{ background: color }} />
+              <i />
+              <i />
             </span>
           );
         }

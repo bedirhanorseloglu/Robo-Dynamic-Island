@@ -74,16 +74,20 @@ export default function RealAppIcon({ sc, size = 18 }) {
   // Gemini
   if (type === 'gemini' || name.includes('gemini') || url.includes('gemini.google.com')) {
     return (
-      <svg width={size} height={size} viewBox="0 0 24 24">
-        <defs>
-          <linearGradient id={`gemGrad_${sc?.id || 'd'}`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#1BA1E3" />
-            <stop offset="50%" stopColor="#7B61FF" />
-            <stop offset="100%" stopColor="#FA5560" />
-          </linearGradient>
-        </defs>
-        <path fill={`url(#gemGrad_${sc?.id || 'd'})`} d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12z"/>
-      </svg>
+      <img
+        src={`${import.meta.env.BASE_URL}gemini-logo.png`}
+        alt="Gemini"
+        width={size}
+        height={size}
+        draggable={false}
+        style={{
+          width: size,
+          height: size,
+          objectFit: 'contain',
+          display: 'block',
+          flexShrink: 0,
+        }}
+      />
     );
   }
 

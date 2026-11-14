@@ -802,8 +802,7 @@ export default function SettingsApp() {
                 </div>
                 <div className="ai-status-pill" onClick={() => setActivePage('connections')}>
                   <span className="ai-badge-icon gemini">
-                    <i />
-                    <i />
+                    <RealAppIcon sc={{ id: 'settings-pill-gemini', type: 'gemini' }} size={15} />
                   </span>
                   <strong>Gemini</strong>
                   <span>active</span>
@@ -880,8 +879,14 @@ export default function SettingsApp() {
                       return (
                         <div key={job.id || idx} className="activity-item-row">
                           <span className={`ai-badge-icon ${badgeClass}`}>
-                            <i />
-                            <i />
+                            {badgeClass === 'gemini' ? (
+                              <RealAppIcon sc={{ id: `activity-gemini-${idx}`, type: 'gemini' }} size={15} />
+                            ) : (
+                              <>
+                                <i />
+                                <i />
+                              </>
+                            )}
                           </span>
                           <div className="activity-item-center">
                             <strong>{job.title}</strong>
@@ -1326,8 +1331,7 @@ export default function SettingsApp() {
               <div className="settings-row align-top">
                 <div className="row-left-with-icon align-top" style={{ flex: 1 }}>
                   <span className="ai-badge-icon lg gemini">
-                    <i />
-                    <i />
+                    <RealAppIcon sc={{ id: 'settings-cli-gemini', type: 'gemini' }} size={22} />
                   </span>
                   <div className="row-text-col" style={{ width: '100%' }}>
                     <strong>Gemini CLI</strong>
@@ -1475,8 +1479,7 @@ export default function SettingsApp() {
               <div className="settings-row no-border">
                 <div className="row-left-with-icon">
                   <span className="ai-badge-icon lg gemini">
-                    <i />
-                    <i />
+                    <RealAppIcon sc={{ id: 'settings-api-gemini', type: 'gemini' }} size={22} />
                   </span>
                   <div className="row-text-col">
                     <strong>Google Gemini API Key</strong>

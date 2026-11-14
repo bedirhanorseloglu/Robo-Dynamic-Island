@@ -787,7 +787,7 @@
 }
 
 .ai-badge-icon.gemini {
-  background: linear-gradient(135deg, #1ba1e3, #fa5560);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .ai-badge-icon.antigravity {
@@ -2003,7 +2003,7 @@
 .notif-item-btn.active::before { position:absolute; top:7px; bottom:7px; left:0; width:2px; border-radius:3px; background:#79aaff; content:''; }
 .notif-right-detail { gap:13px; padding:18px 22px 28px; }
 .notif-preview-stage { height:136px; border-color:rgba(255,255,255,.09); background-image:radial-gradient(ellipse at 50% 100%,rgba(86,143,249,.17),transparent 64%); }
-.notif-preview-island { width:min(340px,calc(100% - 30px)); height:67px; margin-top:0; padding:0 14px; border:1px solid rgba(255,255,255,.09); border-top:0; border-radius:0 0 17px 17px; background:linear-gradient(180deg,#111216,#070708); }
+.notif-preview-island { width:min(340px,calc(100% - 30px)); height:67px; margin-top:0; padding:0 14px; border:1px solid rgba(255,255,255,.11); border-top:0; border-radius:0 0 17px 17px; background:linear-gradient(180deg,rgba(24,27,36,.88),rgba(10,11,16,.94)); backdrop-filter:blur(20px) saturate(170%); -webkit-backdrop-filter:blur(20px) saturate(170%); }
 .notif-preview-check { box-shadow:0 4px 14px color-mix(in srgb,var(--notification-accent,#3b82f6) 30%,transparent); }
 .notif-preview-copy { min-width:0; flex:1; gap:3px; }
 .notif-preview-copy strong { overflow:hidden; font-size:11.5px; text-overflow:ellipsis; white-space:nowrap; }
@@ -2101,7 +2101,7 @@
 .agent-activity-empty small { color:rgba(210,220,233,.43); font-size:9px; }
 
 /* Notification preview follows the selected app/notification accent. */
-.notif-preview-stage { isolation:isolate; background:radial-gradient(ellipse 90% 120% at 50% 112%,color-mix(in srgb,var(--notif-preview-accent,#3b82f6) 27%,transparent),transparent 70%),radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.045),transparent 64%),linear-gradient(145deg,#10131a,#090b10); box-shadow:inset 0 1px rgba(255,255,255,.045),0 10px 25px rgba(0,0,0,.14); }
+.notif-preview-stage { isolation:isolate; background:radial-gradient(ellipse 90% 120% at 50% 112%,color-mix(in srgb,var(--notif-preview-accent,#3b82f6) 27%,transparent),transparent 70%),radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.06),transparent 64%),linear-gradient(145deg,rgba(18,22,30,.74),rgba(9,11,16,.84)); backdrop-filter:blur(18px) saturate(160%); -webkit-backdrop-filter:blur(18px) saturate(160%); box-shadow:inset 0 1px rgba(255,255,255,.07),0 10px 25px rgba(0,0,0,.18); }
 .notif-preview-stage::after { position:absolute; z-index:-1; right:15%; bottom:-42px; left:15%; height:80px; border-radius:50%; background:var(--notif-preview-accent,#3b82f6); opacity:.09; filter:blur(32px); content:''; }
 .notif-preview-island { box-shadow:0 14px 32px rgba(0,0,0,.58),0 0 25px color-mix(in srgb,var(--notif-preview-accent,#3b82f6) 11%,transparent); }
 .notif-preview-check { border:1px solid rgba(255,255,255,.17); box-shadow:0 0 19px color-mix(in srgb,var(--notif-preview-accent,#3b82f6) 43%,transparent); }

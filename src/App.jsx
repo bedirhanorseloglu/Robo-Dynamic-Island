@@ -241,6 +241,7 @@ const NOTIFICATION_BRANDS = [
   { match: /firefox|mozilla/, rgb: '255, 113, 57', hex: '#FF7139', secondaryRgb: '255, 59, 48', secondaryHex: '#FF3B30', brand: 'firefox' },
   { match: /visual studio code|vscode/, rgb: '0, 122, 204', hex: '#007ACC', secondaryRgb: '0, 152, 255', secondaryHex: '#0098FF', brand: 'vscode' },
   { match: /onedrive/, rgb: '0, 120, 212', hex: '#0078D4', secondaryRgb: '35, 144, 235', secondaryHex: '#2390EB', brand: 'onedrive' },
+  { match: /güç\s*&?\s*pil|power\s*&?\s*battery|enerji\s*tasarrufu|energy\s*saver|battery\s*saver|pil\s*tasarrufu|windows\.systemtoast\.power/i, rgb: '52, 211, 153', hex: '#34D399', secondaryRgb: '16, 185, 129', secondaryHex: '#10B981', brand: 'power' },
   { match: /windows security|defender/, rgb: '0, 164, 239', hex: '#00A4EF', secondaryRgb: '0, 102, 204', secondaryHex: '#0066CC', brand: 'security' },
   { match: /windows|system|ayarlar|settings|explorer|dosya yöneticisi|terminal|cmd|powershell/, rgb: '0, 120, 212', hex: '#0078D4', secondaryRgb: '0, 199, 253', secondaryHex: '#00C7FD', brand: 'windows' },
   { match: /brave/, rgb: '251, 84, 43', hex: '#FB542B', secondaryRgb: '255, 26, 85', secondaryHex: '#FF1A55', brand: 'brave' },
@@ -444,11 +445,43 @@ function NotifBrandIcon({ brand, logo, appName, banner }) {
     };
   }, [logo, logoFailed, cacheKey, resolvedAppName, resolvedAppId, banner?.title]);
 
+  const powerIdentity = `${resolvedAppName} ${resolvedAppId} ${banner?.title || ''} ${banner?.body || ''}`;
+  const isPowerNotif =
+    brand === 'power' ||
+    /güç\s*&?\s*pil|power\s*&?\s*battery|windows\.systemtoast\.power/i.test(`${resolvedAppName} ${resolvedAppId}`);
+  if (isPowerNotif) {
+    const isLowBattery = /düşük|zayıf|kritik|low\s*battery|critical/i.test(powerIdentity);
+    const bg = isLowBattery
+      ? 'linear-gradient(145deg, #F59E0B, #EF4444)'
+      : 'linear-gradient(145deg, #34D399, #059669)';
+    return (
+      <div
+        className="notif-custom-app-badge"
+        style={{
+          background: bg,
+          boxShadow: isLowBattery
+            ? 'inset 0 1px 0 rgba(255,255,255,0.28), 0 4px 12px rgba(239,68,68,0.32)'
+            : 'inset 0 1px 0 rgba(255,255,255,0.28), 0 4px 12px rgba(16,185,129,0.32)',
+        }}
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="2.5" y="6.5" width="16.5" height="11" rx="3" stroke="#ffffff" strokeWidth="1.9" />
+          <path d="M20.8 10v4" stroke="#ffffff" strokeWidth="2.1" strokeLinecap="round" />
+          <path d="M11.6 8.6L8.8 12.2h2.6l-.8 3.2 3-3.6h-2.6l.6-3.2z" fill="#ffffff" />
+        </svg>
+      </div>
+    );
+  }
+
+  const b = String(brand || '').toLowerCase();
+  if (b === 'gemini' || /gemini/i.test(`${resolvedAppName} ${resolvedAppId}`)) {
+    return <RealAppIcon sc={{ id: 'gemini-agent-mark', type: 'gemini' }} size={26} />;
+  }
+
   const effectiveLogo = (!logoFailed && logo && isSafeNotificationImage(logo) ? logo : '') || resolvedLogo;
   if (effectiveLogo && isSafeNotificationImage(effectiveLogo)) {
     return <img src={effectiveLogo} alt="" className="notif-toast-app-logo" onError={() => { if (!logoFailed && logo) setLogoFailed(true); else setResolvedLogo(''); }} />;
   }
-  const b = String(brand || '').toLowerCase();
   const name = String(appName || banner?.app || banner?.title || '').toLowerCase();
 
   if (b === 'gmail' || /gmail|google.?mail/.test(name)) {
@@ -728,6 +761,9 @@ function NotifBrandIcon({ brand, logo, appName, banner }) {
   }
   if (b === 'antigravity' || /antigravity/.test(name)) {
     return <RealAppIcon sc={{ id: 'antigravity-agent-mark', type: 'antigravity' }} size={26} />;
+  }
+  if (b === 'gemini' || /gemini/.test(name)) {
+    return <RealAppIcon sc={{ id: 'gemini-agent-mark', type: 'gemini' }} size={26} />;
   }
   if (b === 'ghelper' || /ghelper|g-helper/.test(name)) {
     return (
@@ -3443,21 +3479,31 @@ export default function App() {
                           <span className="notif-card-time">{formatNotifTime(item.timestamp)}</span>
                         </div>
 
-                        <div className="notif-card-message-row">
-                          <span className="notif-card-headline">
-                            <NotificationText text={item.title || item.app} />
-                          </span>
-                          {Boolean(
+                        {(() => {
+                          const appNorm = String(item.app || '').trim().toLocaleLowerCase('tr-TR');
+                          const titleNorm = String(item.title || '').trim().toLocaleLowerCase('tr-TR');
+                          const hasBody = Boolean(
                             item.body &&
                             item.body.trim() &&
                             item.body !== item.title &&
                             item.body !== item.app
-                          ) && (
-                              <span className="notif-card-body">
-                                <NotificationText text={item.body} />
-                              </span>
-                            )}
-                        </div>
+                          );
+                          const showHeadline = Boolean(item.title && item.title.trim() && titleNorm !== appNorm);
+                          return (
+                            <div className="notif-card-message-row">
+                              {showHeadline && (
+                                <span className="notif-card-headline">
+                                  <NotificationText text={item.title} />
+                                </span>
+                              )}
+                              {hasBody && (
+                                <span className="notif-card-body">
+                                  <NotificationText text={item.body} />
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </button>
 
@@ -3608,7 +3654,7 @@ export default function App() {
 
                         {currentLayoutId === 'clock' && (
                           <>
-                            <div className="cc-big-clock" style={{ color: effectiveClockColor }}>
+                            <div className="cc-big-clock" style={{ color: effectiveClockColor, '--clock-glass-color': effectiveClockColor }}>
                               {formatTimeHHMM(now)}
                             </div>
                             <div className="cc-cards-row">
@@ -4007,12 +4053,13 @@ export default function App() {
                                       aria-label="Play or Pause"
                                     >
                                       {currentMedia.isPlaying ? (
-                                        <Pause size={13} fill="#050506" strokeWidth={2.5} />
+                                        <Pause size={13} fill="#ffffff" color="#ffffff" strokeWidth={2.2} />
                                       ) : (
                                         <Play
                                           size={13}
-                                          fill="#050506"
-                                          strokeWidth={2.5}
+                                          fill="#ffffff"
+                                          color="#ffffff"
+                                          strokeWidth={2.2}
                                           style={{ marginLeft: 1 }}
                                         />
                                       )}
@@ -4046,12 +4093,13 @@ export default function App() {
                                   aria-label="Start or Pause Focus"
                                 >
                                   {timerRunning ? (
-                                    <Pause size={14} fill="#050506" strokeWidth={2.5} />
+                                    <Pause size={14} fill="#ffffff" color="#ffffff" strokeWidth={2.2} />
                                   ) : (
                                     <Play
                                       size={14}
-                                      fill="#050506"
-                                      strokeWidth={2.5}
+                                      fill="#ffffff"
+                                      color="#ffffff"
+                                      strokeWidth={2.2}
                                       style={{ marginLeft: 1 }}
                                     />
                                   )}
