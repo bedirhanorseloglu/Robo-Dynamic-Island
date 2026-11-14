@@ -68,6 +68,31 @@ public class WinAudioHelper {
             return -1;
         }
     }
+
+    public static bool SetVolume(int percent) {
+        try {
+            bool dummy;
+            if (endpoint == null) GetVolume(out dummy);
+            if (endpoint == null) return false;
+            int clamped = Math.Max(0, Math.Min(100, percent));
+            endpoint.SetMasterVolumeLevelScalar(clamped / 100.0f, Guid.Empty);
+            endpoint.SetMute(clamped <= 0, Guid.Empty);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    public static bool ToggleMute() {
+        try {
+            bool muted = false;
+            if (GetVolume(out muted) < 0 || endpoint == null) return false;
+            endpoint.SetMute(!muted, Guid.Empty);
+            return true;
+        } catch {
+            return false;
+        }
+    }
 }
 
 public static class WinWindowHelper {
@@ -295,6 +320,81 @@ function Get-NotificationAppLogoDataUri($AppInfo) {
     }
 }
 
+$script:appProcessLogoCache = @{}
+function Get-NotificationProcessLogoDataUri($AppName, $AppId) {
+    try {
+        $cacheKey = "$AppId|$AppName".ToLowerInvariant().Trim()
+        if (-not $cacheKey -or $cacheKey -eq '|') { return '' }
+        if ($script:appProcessLogoCache.ContainsKey($cacheKey)) {
+            return $script:appProcessLogoCache[$cacheKey]
+        }
+
+        $candidates = New-Object System.Collections.Generic.List[string]
+        if ($AppId) {
+            $idTail = ($AppId -split '[!\\/.]')[-1]
+            if ($idTail) { $candidates.Add($idTail) }
+            $idClean = ($AppId -replace '^electron\.app\.', '')
+            if ($idClean) { $candidates.Add($idClean) }
+        }
+        if ($AppName -and $AppName -ne 'Windows') {
+            $candidates.Add($AppName)
+            $noSpaces = ($AppName -replace '\s+', '')
+            if ($noSpaces) { $candidates.Add($noSpaces) }
+            $lowApp = $AppName.ToLowerInvariant().Trim()
+            if ($lowApp -match 'visual studio code|vscode') { $candidates.Add('code') }
+            elseif ($lowApp -match 'google chrome') { $candidates.Add('chrome') }
+            elseif ($lowApp -match 'microsoft edge') { $candidates.Add('msedge') }
+            elseif ($lowApp -match 'telegram') { $candidates.Add('telegram') }
+            elseif ($lowApp -match 'g-?helper') { $candidates.Add('ghelper') }
+            elseif ($lowApp -match 'windows security|defender') { $candidates.Add('securityhealthsystray') }
+        }
+
+        $exePath = ''
+        $procs = Get-Process -ErrorAction SilentlyContinue
+        foreach ($cand in ($candidates | Select-Object -Unique)) {
+            if (-not $cand -or $cand.Length -lt 2) { continue }
+            $lowCand = $cand.ToLowerInvariant()
+            $match = $procs | Where-Object {
+                $_.Path -and (
+                    $_.ProcessName.ToLowerInvariant() -eq $lowCand -or
+                    $_.ProcessName.ToLowerInvariant().Contains($lowCand) -or
+                    ($_.MainWindowTitle -and $_.MainWindowTitle.ToLowerInvariant().Contains($lowCand))
+                )
+            } | Select-Object -First 1
+            if ($null -ne $match -and $match.Path) {
+                $exePath = $match.Path
+                break
+            }
+        }
+
+        $dataUri = ''
+        if ($exePath -and (Test-Path -LiteralPath $exePath)) {
+            Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+            $ico = $null; $bmp = $null; $ms = $null
+            try {
+                $ico = [System.Drawing.Icon]::ExtractAssociatedIcon($exePath)
+                if ($null -ne $ico) {
+                    $bmp = $ico.ToBitmap()
+                    $ms = New-Object System.IO.MemoryStream
+                    $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+                    $bytes = $ms.ToArray()
+                    if ($bytes.Length -gt 0 -and $bytes.Length -le 524288) {
+                        $dataUri = "data:image/png;base64,$([Convert]::ToBase64String($bytes))"
+                    }
+                }
+            } finally {
+                if ($null -ne $ms) { try { $ms.Dispose() } catch {} }
+                if ($null -ne $bmp) { try { $bmp.Dispose() } catch {} }
+                if ($null -ne $ico) { try { $ico.Dispose() } catch {} }
+            }
+        }
+        $script:appProcessLogoCache[$cacheKey] = $dataUri
+        return $dataUri
+    } catch {
+        return ''
+    }
+}
+
 try {
     Add-Type -ReferencedAssemblies System.Management -TypeDefinition @'
 using System;
@@ -348,7 +448,46 @@ try {
     $brightnessEventSubscription = Register-WmiEvent -Namespace 'root\wmi' -Query 'SELECT * FROM WmiMonitorBrightnessEvent' -SourceIdentifier 'TwoCodeBrightness' -ErrorAction Stop
 } catch {}
 
+$stdinStream = $null
+$stdinBuf = New-Object byte[] 256
+$stdinAcc = ''
+$stdinReadTask = $null
+try {
+    $stdinStream = [Console]::OpenStandardInput()
+    if ($null -ne $stdinStream) {
+        $stdinReadTask = $stdinStream.ReadAsync($stdinBuf, 0, $stdinBuf.Length)
+    }
+} catch {}
+
 while ($true) {
+    if ($null -ne $stdinReadTask -and $stdinReadTask.IsCompleted) {
+        $bytesRead = 0
+        try { $bytesRead = $stdinReadTask.Result } catch { $bytesRead = 0 }
+        if ($bytesRead -gt 0) {
+            $stdinAcc += [System.Text.Encoding]::UTF8.GetString($stdinBuf, 0, $bytesRead)
+            while ($stdinAcc.Contains("`n")) {
+                $nlIdx = $stdinAcc.IndexOf("`n")
+                $trimmedCmd = $stdinAcc.Substring(0, $nlIdx).Trim()
+                $stdinAcc = $stdinAcc.Substring($nlIdx + 1)
+                if ($trimmedCmd -match '^set-volume:(\d+)$') {
+                    $targetVol = [int]$Matches[1]
+                    if ([WinAudioHelper]::SetVolume($targetVol)) {
+                        $lastVol = [Math]::Max(0, [Math]::Min(100, $targetVol))
+                        $lastMuted = ($lastVol -le 0)
+                    }
+                } elseif ($trimmedCmd -eq 'toggle-mute') {
+                    if ([WinAudioHelper]::ToggleMute()) {
+                        $m = $false
+                        $v = [WinAudioHelper]::GetVolume([ref]$m)
+                        if ($v -ge 0) { $lastVol = $v; $lastMuted = $m }
+                    }
+                }
+            }
+            try { $stdinReadTask = $stdinStream.ReadAsync($stdinBuf, 0, $stdinBuf.Length) } catch { $stdinReadTask = $null }
+        } else {
+            $stdinReadTask = $null
+        }
+    }
     # Parent Electron lifecycle guard: immediately terminate if Electron exited
     if ($ElectronPid -gt 0) {
         $parentProc = Get-Process -Id $ElectronPid -ErrorAction SilentlyContinue
@@ -418,7 +557,7 @@ while ($true) {
 
         # Sample brightness at 10 Hz using cached WMI ManagementObject for instant HUD updates
         # even when pressing brightness keys repeatedly or when WmiMonitorBrightnessEvent lags.
-        if ($lastBrightness -lt 0 -or ($now - $lastBrightnessPoll).TotalMilliseconds -ge 100) {
+        if (-not $wmiBrightnessUnsupported -and ($lastBrightness -lt 0 -or ($now - $lastBrightnessPoll).TotalMilliseconds -ge 100)) {
             $lastBrightnessPoll = $now
             $bri = -1
             try { $bri = [WinBrightnessHelper]::GetBrightness() } catch {}
@@ -426,6 +565,9 @@ while ($true) {
                 $bObj = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction SilentlyContinue | Select-Object -First 1
                 if ($null -ne $bObj -and $null -ne $bObj.CurrentBrightness) {
                     $bri = [int]$bObj.CurrentBrightness
+                } else {
+                    # External/desktop monitors do not expose WmiMonitorBrightness; stop polling WMI at 10 Hz.
+                    $wmiBrightnessUnsupported = $true
                 }
             }
             if ($bri -ge 0) {
@@ -485,8 +627,33 @@ while ($true) {
                                     if ($els.Length -ge 2) {
                                         $bodyTxt = ($els | Select-Object -Skip 1 | ForEach-Object { [string]$_.Text }) -join "`n"
                                     }
+                                    if (-not $appLogo) {
+                                        try {
+                                            $imgs = @($binding.GetImageElements())
+                                            foreach ($imgEl in $imgs) {
+                                                $imgSrc = [string]$imgEl.Src
+                                                if ($imgSrc -and $imgSrc -match '^(?:file:///|[A-Za-z]:[/\\])') {
+                                                    $localImgPath = $imgSrc -replace '^file:///', ''
+                                                    $localImgPath = [System.Uri]::UnescapeDataString($localImgPath).Replace('/', '\')
+                                                    if (Test-Path -LiteralPath $localImgPath) {
+                                                        $imgBytes = [System.IO.File]::ReadAllBytes($localImgPath)
+                                                        if ($imgBytes.Length -gt 0 -and $imgBytes.Length -le 524288) {
+                                                            $imgExt = [System.IO.Path]::GetExtension($localImgPath).ToLowerInvariant()
+                                                            $imgMime = if ($imgExt -eq '.jpg' -or $imgExt -eq '.jpeg') { 'image/jpeg' } elseif ($imgExt -eq '.webp') { 'image/webp' } else { 'image/png' }
+                                                            $appLogo = "data:$imgMime;base64,$([Convert]::ToBase64String($imgBytes))"
+                                                            break
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } catch {}
+                                    }
                                 }
                             } catch {}
+
+                            if (-not $appLogo) {
+                                $appLogo = Get-NotificationProcessLogoDataUri $appName $appId
+                            }
 
                             if ($titleTxt -or $bodyTxt) {
                                 $nEv = @{

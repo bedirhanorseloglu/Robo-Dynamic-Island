@@ -4,6 +4,7 @@ export const CLOCK_FONT_OPTIONS = [
   { id: 'cormorant', name: 'Cormorant Garamond', family: "'Cormorant Garamond', Georgia, serif", google: 'Cormorant+Garamond:wght@600;700' },
   { id: 'jetbrains', name: 'JetBrains Mono', family: "'JetBrains Mono', monospace", google: 'JetBrains+Mono:wght@400;500;600;700;800' },
   { id: 'caveat', name: 'Caveat', family: "'Caveat', cursive", google: 'Caveat:wght@700' },
+  { id: 'sf-apple', name: 'SF Pro (Apple)', family: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', sans-serif", google: null },
 ];
 
 export const TEXT_FONT_OPTIONS = [
@@ -49,7 +50,7 @@ export function applyTypographyTokens({ textFontIndex = 0, numberFontIndex = 3 }
 
 export function loadTypographyFonts() {
   if (typeof document === 'undefined') return;
-  const families = [...new Set([...TEXT_FONT_OPTIONS, ...CLOCK_FONT_OPTIONS].map(({ google }) => google))];
+  const families = [...new Set([...TEXT_FONT_OPTIONS, ...CLOCK_FONT_OPTIONS].map(({ google }) => google).filter(Boolean))];
   if (!document.querySelector('link[data-twocode-font-preconnect]')) {
     const preconnect = document.createElement('link');
     preconnect.rel = 'preconnect';

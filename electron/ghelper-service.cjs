@@ -1,4 +1,5 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const net = require('net');
 const { execFile } = require('child_process');
@@ -180,8 +181,23 @@ class GHelperBridgeClient {
     this.lastAutoWakeAt = 0;
     this.lastAuraKeyAt = 0;
     this.lastPowerChangeAt = 0;
+    this.startedAt = Date.now();
+    this.lastGHelperInitAt = 0;
     this.lastDispatchedModeId = null;
     this.lastDispatchedModeAt = 0;
+  }
+
+  shouldSuppressAuraToast() {
+    const now = Date.now();
+    const isExplicitAuraKey = now - this.lastAuraKeyAt < 1500;
+    if (isExplicitAuraKey) return false;
+    const isStartupGrace = now - this.startedAt < 45000;
+    const isSystemBoot = os.uptime() < 120;
+    const isRecentGHelperInit = now - this.lastGHelperInitAt < 10000;
+    const isRecentBacklight = now - this.lastBacklightAt < 2500;
+    const isRecentAutoWake = now - this.lastAutoWakeAt < 4000;
+    const isRecentPowerChange = now - (this.lastPowerChangeAt || 0) < 5000;
+    return isStartupGrace || isSystemBoot || isRecentGHelperInit || isRecentBacklight || isRecentAutoWake || isRecentPowerChange;
   }
 
   dispatchPerformanceModeToast(modeId, rawName = null) {
@@ -525,16 +541,15 @@ class GHelperBridgeClient {
       }
     }
 
+    // Track G-Helper startup / resume init lines so initial AuraMode apply on boot doesn't pop a HUD
+    if (/(?:App launched|System resumed|Monitor Power|Init Aura|G-Helper\s+v?\d)/i.test(line)) {
+      this.lastGHelperInitAt = Date.now();
+    }
+
     // Aura Mode / Klavye Rengi: e.g. "AuraMode: AuraStatic", "AuraMode: ZONETEST"
     const auraMatch = line.match(/AuraMode:\s*([^\r\n]+)/i);
     if (auraMatch) {
-      // G-Helper internally re-applies AuraMode whenever keyboard backlight changes, auto-wakes, or power source changes!
-      // Suppress this false-positive if a backlight change, auto-wake, or power transition happened recently and no explicit Aura key was pressed.
-      const isRecentBacklight = Date.now() - this.lastBacklightAt < 2500;
-      const isRecentAutoWake = Date.now() - this.lastAutoWakeAt < 4000;
-      const isRecentPowerChange = Date.now() - (this.lastPowerChangeAt || 0) < 5000;
-      const isExplicitAuraKey = Date.now() - this.lastAuraKeyAt < 1500;
-      if ((isRecentBacklight || isRecentAutoWake || isRecentPowerChange) && !isExplicitAuraKey) {
+      if (this.shouldSuppressAuraToast()) {
         return;
       }
 
@@ -805,6 +820,9 @@ class GHelperBridgeClient {
             } else if (data.type === 'toast' && data.text) {
               const parsed = resolveGHelperToast(data.text);
               if (parsed) {
+                if (parsed.category === 'aura' && this.shouldSuppressAuraToast()) {
+                  continue;
+                }
                 this.lastDispatchedToastAt = Date.now();
                 this.onToast(parsed);
               }
@@ -857,14 +875,16 @@ const TASK_NAME = 'TwoCode_GHelperBridge';
 function checkScheduledTaskStatus() {
   return new Promise((resolve) => {
     execFile(
-      'powershell.exe',
-      ['-NoProfile', '-Command', `Get-ScheduledTask -TaskName "${TASK_NAME}" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty State`],
+      'schtasks.exe',
+      ['/Query', '/TN', TASK_NAME, '/FO', 'CSV', '/NH'],
+      { windowsHide: true },
       (err, stdout) => {
-        if (err || !stdout.trim()) {
+        if (err || !stdout || !stdout.trim()) {
           resolve({ installed: false, running: false, state: 'NotInstalled' });
         } else {
-          const state = stdout.trim();
-          resolve({ installed: true, running: state === 'Running', state });
+          const line = stdout.trim();
+          const isRunning = /"(?:Running|Çalışıyor)"/i.test(line);
+          resolve({ installed: true, running: isRunning, state: isRunning ? 'Running' : 'Ready' });
         }
       }
     );

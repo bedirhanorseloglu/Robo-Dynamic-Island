@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld('twocode', {
   resolveAgentApproval: (id, approved) => ipcRenderer.invoke('resolve-agent-approval', { id, approved }),
   simulateAgentTask: (type) => ipcRenderer.invoke('simulate-agent-task', type),
   adjustVolume: (direction) => ipcRenderer.invoke('adjust-volume', direction),
+  setVolume: (percent) => ipcRenderer.invoke('set-volume', percent),
   onSystemHud: (cb) => {
     const listener = (_event, data) => cb(data);
     ipcRenderer.on('system-hud', listener);
@@ -111,6 +112,7 @@ contextBridge.exposeInMainWorld('twocode', {
     return () => ipcRenderer.removeListener('local-agenda-update', listener);
   },
   getFileIcon: (filePath) => ipcRenderer.invoke('get-file-icon', filePath),
+  resolveAppLogo: (payload) => ipcRenderer.invoke('resolve-app-logo', payload),
   testMailNotif: () => ipcRenderer.invoke('test-mail-notif'),
   testAgendaNotif: () => ipcRenderer.invoke('test-agenda-notif'),
   connectGoogle: (opts) => ipcRenderer.invoke('connect-google', opts),

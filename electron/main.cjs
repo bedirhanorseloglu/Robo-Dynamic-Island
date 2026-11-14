@@ -1572,11 +1572,6 @@ function createWindow() {
 
   mainWindow.setSkipTaskbar(true);
 
-  // Keep the overlay visible to the user while excluding its contents from screen captures.
-  if (process.platform === 'win32' && typeof mainWindow.setContentProtection === 'function') {
-    mainWindow.setContentProtection(true);
-  }
-
   applyShapeImmediate(currentShape);
 
   mainWindow.setAlwaysOnTop(true, 'screen-saver');
@@ -2083,6 +2078,7 @@ ipcMain.on('trigger-test-notification', (_event, notif) => {
       title: notif?.title || 'TwoCode Bildirim',
       body: notif?.subtitle || notif?.body || 'Bildirim içeriği başarıyla görüntülendi',
       accentHex: notif?.accentHex,
+      logo: notif?.logo || notif?.appLogoUri || '',
       appLogoUri: notif?.appLogoUri,
     });
   }
@@ -2730,6 +2726,291 @@ ipcMain.handle('get-file-icon', async (_event, filePath) => {
     if (!filePath || !fs.existsSync(filePath)) return null;
     const icon = await app.getFileIcon(filePath, { size: 'normal' });
     return icon ? icon.toDataURL() : null;
+  } catch {
+    return null;
+  }
+});
+
+const appLogoCache = new Map();
+const appLogoInFlight = new Map();
+let startMenuLnkCache = null;
+
+const APP_ICON_ALIASES = {
+  'visual studio code': ['code', 'visual studio code'],
+  vscode: ['code', 'visual studio code'],
+  'google chrome': ['chrome', 'google chrome'],
+  'microsoft edge': ['msedge', 'microsoft edge'],
+  'telegram desktop': ['telegram', 'telegram desktop'],
+  'g-helper': ['ghelper', 'g-helper'],
+  ghelper: ['ghelper', 'g-helper'],
+  'windows security': ['securityhealthsystray'],
+  'windows defender': ['securityhealthsystray'],
+  'dosya yöneticisi': ['explorer'],
+  'file explorer': ['explorer'],
+};
+
+function getStartMenuShortcuts() {
+  if (Array.isArray(startMenuLnkCache)) return startMenuLnkCache;
+  const results = [];
+  const roots = [
+    process.env.APPDATA ? path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs') : '',
+    process.env.ProgramData ? path.join(process.env.ProgramData, 'Microsoft', 'Windows', 'Start Menu', 'Programs') : '',
+  ].filter(Boolean);
+
+  const walk = (dir, depth) => {
+    if (depth > 4) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath, depth + 1);
+      } else if (entry.isFile() && /\.lnk$/i.test(entry.name)) {
+        results.push({
+          nameLower: entry.name.replace(/\.lnk$/i, '').toLowerCase(),
+          path: fullPath,
+        });
+      }
+    }
+  };
+
+  for (const root of roots) walk(root, 0);
+  startMenuLnkCache = results;
+  return results;
+}
+
+function buildAppLogoCandidates(appName, appId) {
+  const genericNames = new Set(['windows', 'notification', 'bildirim', 'sistem', 'system', 'app', 'unknown']);
+  const candidates = [];
+  const push = (val) => {
+    const clean = String(val || '').trim();
+    if (!clean || clean.length < 2) return;
+    if (!candidates.some((c) => c.toLowerCase() === clean.toLowerCase())) {
+      candidates.push(clean);
+    }
+  };
+
+  if (appId && !/^twocode\./i.test(appId) && !/^com\.google\.gmail$/i.test(appId)) {
+    const idTail = appId.split(/[!\\/.]/).pop();
+    if (idTail && idTail.toLowerCase() !== 'app') push(idTail);
+    const idClean = appId.replace(/^electron\.app\./i, '');
+    if (idClean && !idClean.includes('!')) push(idClean);
+  }
+
+  const lowerName = String(appName || '').trim().toLowerCase();
+  if (appName && !genericNames.has(lowerName)) {
+    push(appName);
+    push(appName.replace(/\s+/g, ''));
+    const aliases = APP_ICON_ALIASES[lowerName];
+    if (Array.isArray(aliases)) {
+      aliases.forEach(push);
+    }
+  }
+  return candidates;
+}
+
+function resolveAppLogoViaPowerShell(appName, appId, candidates) {
+  return new Promise((resolve) => {
+    const psScript = `
+$ErrorActionPreference = 'SilentlyContinue'
+$appName = [string]$env:TWOCODE_APP_NAME
+$appId = [string]$env:TWOCODE_APP_ID
+$cands = @(([string]$env:TWOCODE_APP_CANDIDATES) -split '\\|' | Where-Object { $_ -and $_.Length -ge 2 })
+
+$procs = Get-Process
+foreach ($cand in $cands) {
+  $low = $cand.ToLowerInvariant()
+  $m = $procs | Where-Object {
+    $_.Path -and (
+      $_.ProcessName.ToLowerInvariant() -eq $low -or
+      ($low.Length -ge 4 -and $_.ProcessName.ToLowerInvariant().Contains($low)) -or
+      ($_.MainWindowTitle -and $low.Length -ge 4 -and $_.MainWindowTitle.ToLowerInvariant().Contains($low))
+    )
+  } | Select-Object -First 1
+  if ($null -ne $m -and $m.Path -and (Test-Path -LiteralPath $m.Path)) {
+    Write-Output ('PATH:' + $m.Path)
+    exit 0
+  }
+}
+
+$pfn = ''
+if ($appId -match '^([^!]+)!') {
+  $pfn = $Matches[1]
+}
+if (-not $pfn -and $cands.Count -gt 0) {
+  $startApps = Get-StartApps
+  foreach ($cand in $cands) {
+    $low = $cand.ToLowerInvariant()
+    $sa = $startApps | Where-Object {
+      ($_.AppID -and $_.AppID.ToLowerInvariant() -eq $appId.ToLowerInvariant()) -or
+      ($_.Name -and $_.Name.ToLowerInvariant() -eq $low) -or
+      ($_.Name -and $low.Length -ge 4 -and $_.Name.ToLowerInvariant().Contains($low))
+    } | Select-Object -First 1
+    if ($null -ne $sa -and $sa.AppID) {
+      if ($sa.AppID -match '^[A-Za-z]:\\\\' -and (Test-Path -LiteralPath $sa.AppID)) {
+        Write-Output ('PATH:' + $sa.AppID)
+        exit 0
+      }
+      if ($sa.AppID -match '^([^!]+)!') {
+        $pfn = $Matches[1]
+        break
+      }
+    }
+  }
+}
+
+if ($pfn) {
+  $pkg = Get-AppxPackage | Where-Object { $_.PackageFamilyName -eq $pfn } | Select-Object -First 1
+  if ($null -ne $pkg -and $pkg.InstallLocation) {
+    $manifestPath = Join-Path $pkg.InstallLocation 'AppxManifest.xml'
+    if (Test-Path -LiteralPath $manifestPath) {
+      [xml]$xml = Get-Content -LiteralPath $manifestPath -Raw
+      $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+      $ns.AddNamespace('m', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
+      $ns.AddNamespace('uap', 'http://schemas.microsoft.com/appx/manifest/uap/windows10')
+      $vis = $xml.SelectSingleNode('//uap:VisualElements', $ns)
+      $logoRel = ''
+      if ($null -ne $vis) {
+        $logoRel = $vis.GetAttribute('Square44x44Logo')
+        if (-not $logoRel) { $logoRel = $vis.GetAttribute('Square150x150Logo') }
+      }
+      if (-not $logoRel) {
+        $logoNode = $xml.SelectSingleNode('//m:Properties/m:Logo', $ns)
+        if ($null -ne $logoNode) { $logoRel = $logoNode.InnerText }
+      }
+      if ($logoRel) {
+        $full = Join-Path $pkg.InstallLocation $logoRel
+        $dir = Split-Path $full -Parent
+        $base = [System.IO.Path]::GetFileNameWithoutExtension($full)
+        $ext = [System.IO.Path]::GetExtension($full)
+        $files = @(Get-ChildItem -LiteralPath $dir -Filter "$base*$ext" | Where-Object { $_.Name -notmatch 'contrast-' })
+        $pick = $files | Where-Object { $_.Name -match 'scale-200|targetsize-48' } | Select-Object -First 1
+        if ($null -eq $pick) { $pick = $files | Where-Object { $_.Name -match 'scale-150|scale-100|targetsize-32' } | Select-Object -First 1 }
+        if ($null -eq $pick) { $pick = $files | Select-Object -First 1 }
+        if ($null -ne $pick -and (Test-Path -LiteralPath $pick.FullName)) {
+          $bytes = [System.IO.File]::ReadAllBytes($pick.FullName)
+          if ($bytes.Length -gt 0 -and $bytes.Length -le 524288) {
+            $mime = if ($ext -ieq '.jpg' -or $ext -ieq '.jpeg') { 'image/jpeg' } else { 'image/png' }
+            Write-Output ("DATA:data:$mime;base64," + [Convert]::ToBase64String($bytes))
+            exit 0
+          }
+        }
+      }
+    }
+  }
+}
+`;
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psScript],
+      {
+        timeout: 5500,
+        windowsHide: true,
+        env: {
+          ...process.env,
+          TWOCODE_APP_NAME: appName,
+          TWOCODE_APP_ID: appId,
+          TWOCODE_APP_CANDIDATES: candidates.join('|'),
+        },
+      },
+      async (err, stdout) => {
+        if (err || !stdout) return resolve(null);
+        const line = String(stdout).split(/\r?\n/).map((l) => l.trim()).find((l) => l.startsWith('PATH:') || l.startsWith('DATA:'));
+        if (!line) return resolve(null);
+        if (line.startsWith('DATA:')) return resolve(line.slice(5));
+        if (line.startsWith('PATH:')) {
+          const exePath = line.slice(5);
+          try {
+            if (exePath && fs.existsSync(exePath)) {
+              const icon = await app.getFileIcon(exePath, { size: 'normal' });
+              return resolve(icon ? icon.toDataURL() : null);
+            }
+          } catch {}
+        }
+        resolve(null);
+      }
+    );
+  });
+}
+
+ipcMain.handle('resolve-app-logo', async (_event, payload) => {
+  try {
+    const appName = String(payload?.app || '').trim();
+    const appId = String(payload?.appId || '').trim();
+    const cacheKey = `${appId}|${appName}`.toLowerCase();
+    if (!cacheKey || cacheKey === '|') return null;
+
+    const cached = appLogoCache.get(cacheKey);
+    if (cached) {
+      if (cached.dataUri) return cached.dataUri;
+      if (Date.now() - cached.ts < 5 * 60 * 1000) return null;
+    }
+
+    if (appLogoInFlight.has(cacheKey)) {
+      return await appLogoInFlight.get(cacheKey);
+    }
+
+    const promise = (async () => {
+      if (appId && /^[a-zA-Z]:[/\\]/.test(appId) && fs.existsSync(appId)) {
+        try {
+          const icon = await app.getFileIcon(appId, { size: 'normal' });
+          const dataUri = icon ? icon.toDataURL() : null;
+          if (dataUri) {
+            appLogoCache.set(cacheKey, { dataUri, ts: Date.now() });
+            return dataUri;
+          }
+        } catch {}
+      }
+
+      const candidates = buildAppLogoCandidates(appName, appId);
+      if (candidates.length === 0) {
+        appLogoCache.set(cacheKey, { dataUri: null, ts: Date.now() });
+        return null;
+      }
+
+      // 1. Fast Start Menu .lnk lookup
+      const shortcuts = getStartMenuShortcuts();
+      let lnkMatch = null;
+      for (const cand of candidates) {
+        const low = cand.toLowerCase();
+        lnkMatch = shortcuts.find((s) => s.nameLower === low);
+        if (lnkMatch) break;
+      }
+      if (!lnkMatch) {
+        for (const cand of candidates) {
+          const low = cand.toLowerCase();
+          if (low.length < 4) continue;
+          lnkMatch = shortcuts.find((s) => s.nameLower.includes(low) || low.includes(s.nameLower));
+          if (lnkMatch) break;
+        }
+      }
+      if (lnkMatch) {
+        try {
+          const icon = await app.getFileIcon(lnkMatch.path, { size: 'normal' });
+          const dataUri = icon ? icon.toDataURL() : null;
+          if (dataUri) {
+            appLogoCache.set(cacheKey, { dataUri, ts: Date.now() });
+            return dataUri;
+          }
+        } catch {}
+      }
+
+      // 2. Running process / UWP AppxManifest fallback
+      const psResult = await resolveAppLogoViaPowerShell(appName, appId, candidates);
+      appLogoCache.set(cacheKey, { dataUri: psResult || null, ts: Date.now() });
+      return psResult || null;
+    })();
+
+    appLogoInFlight.set(cacheKey, promise);
+    try {
+      return await promise;
+    } finally {
+      appLogoInFlight.delete(cacheKey);
+    }
   } catch {
     return null;
   }

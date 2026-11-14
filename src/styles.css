@@ -1413,18 +1413,17 @@ body,
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--notif-panel-hex, #38bdf8) 28%, rgba(255, 255, 255, 0.12));
+  border: 1px solid color-mix(in srgb, var(--notif-panel-hex, #38bdf8) 32%, rgba(255, 255, 255, 0.16));
   border-radius: 22px;
   color: #f7f7fb;
   background:
-    linear-gradient(to top, rgba(var(--notif-panel-rgb, 110, 142, 185), 0.14) 0%, transparent 52%),
-    linear-gradient(180deg, rgba(20, 22, 28, 0.96) 0%, rgba(10, 11, 15, 0.98) 100%),
-    #07080b;
+    linear-gradient(to top, rgba(var(--notif-panel-rgb, 110, 142, 185), 0.16) 0%, transparent 55%),
+    linear-gradient(180deg, rgba(22, 25, 34, 0.78) 0%, rgba(10, 12, 17, 0.86) 100%);
   box-shadow: 
-    0 22px 60px rgba(0, 0, 0, 0.75),
-    0 4px 16px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 0 32px rgba(var(--notif-panel-rgb, 56, 189, 248), 0.14);
+    0 22px 60px rgba(0, 0, 0, 0.72),
+    0 4px 16px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 32px rgba(var(--notif-panel-rgb, 56, 189, 248), 0.16);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   animation: notifPanelIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1587,10 +1586,11 @@ body,
   width: 100%;
   padding: 7px 8px 7px 7px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   background: 
-    linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.015) 100%),
-    linear-gradient(90deg, rgba(var(--notif-accent-rgb, 56, 189, 248), 0.06) 0%, transparent 80%);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(90deg, rgba(var(--notif-accent-rgb, 56, 189, 248), 0.08) 0%, transparent 80%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: inherit;
   transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
               background 0.2s ease,
@@ -7421,9 +7421,11 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   width: 254px;
   padding: 8px;
   border-radius: 18px;
-  background: #111116;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.98);
+  background: linear-gradient(180deg, rgba(24, 26, 36, 0.78) 0%, rgba(12, 13, 19, 0.86) 100%);
+  backdrop-filter: blur(26px) saturate(185%);
+  -webkit-backdrop-filter: blur(26px) saturate(185%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.18);
   z-index: 9999;
   display: flex;
   flex-direction: column;
@@ -7438,8 +7440,9 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
 }
 
 .cc-tile {
-  background: #1c1c23;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
   border-radius: 14px;
   padding: 12px 10px 10px 12px;
   display: flex;
@@ -7447,11 +7450,12 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   align-items: flex-start;
   gap: 3px;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.12s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
 }
 
 .cc-tile:hover {
-  background: #262632;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-1px);
 }
 
@@ -7719,14 +7723,16 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   box-sizing: border-box;
   padding: 8px;
   border-radius: 18px;
-  background: #111116;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.98);
+  background: linear-gradient(180deg, rgba(24, 26, 36, 0.78) 0%, rgba(12, 13, 19, 0.86) 100%);
+  backdrop-filter: blur(26px) saturate(185%);
+  -webkit-backdrop-filter: blur(26px) saturate(185%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.86), inset 0 1px 0 rgba(255, 255, 255, 0.18);
   z-index: 9999;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  animation: musicServicePopIn 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: musicServicePopIn 0.16s cubic-bezier(0.22, 1, 0.3, 1);
   pointer-events: auto;
 }
 
@@ -7735,7 +7741,8 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   width: 100%;
   height: 34px;
   border-radius: 11px;
-  background: #232329;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
   cursor: ew-resize;
   display: flex;
@@ -7775,8 +7782,9 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   height: 100%;
   min-height: 62px;
   border-radius: 12px;
-  background: #1a1a20;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
   color: #ffffff;
   display: flex;
   flex-direction: column;
@@ -7784,11 +7792,12 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   justify-content: center;
   gap: 5px;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.12s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
 }
 
 .popover-tile-btn:hover {
-  background: #26262e;
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-1px);
 }
 
@@ -7870,18 +7879,22 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
   width: 44px;
   height: 44px;
   border-radius: 13px;
-  background: #18181d;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 6px 16px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  transition: transform 0.15s ease, background 0.15s ease;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
 .all-apps-cell:hover .all-apps-squircle {
   transform: scale(1.08);
-  background: #24242c;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .all-apps-label {
@@ -10115,10 +10128,10 @@ body .robo-eyes-wrap.is-charging .robo-heart-eye {
 .layer-notif-toast .notif-toast-avatar.is-app-avatar > .notif-agent-logo {
   width: 100%;
   height: 100%;
-  padding: 0;
+  padding: 2px;
   border: none;
   border-radius: inherit;
-  object-fit: cover;
+  object-fit: contain;
   filter: none;
   box-shadow: none;
 }

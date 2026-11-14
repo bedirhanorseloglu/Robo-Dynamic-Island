@@ -368,7 +368,7 @@ function NotificationAvatar({ banner, brand, presentation }) {
           <span className="notif-toast-initials is-image-fallback">{initials || '?'}</span>
           <img className="notif-toast-profile-image" src={profileImage} alt={`${presentation.sender} profil fotoğrafı`} onError={(event) => { event.currentTarget.style.display = 'none'; }} />
           <span className="notif-toast-app-chip" aria-label={`${presentation.app} logosu`}>
-            <NotifBrandIcon brand={brand} logo={banner?.logo} appName={presentation.app || banner?.app} banner={banner} />
+            <NotifBrandIcon key={`${brand}-${banner?.logo || 'brand'}`} brand={brand} logo={banner?.logo} appName={presentation.app || banner?.app} banner={banner} />
           </span>
         </>
       ) : (
@@ -378,10 +378,75 @@ function NotificationAvatar({ banner, brand, presentation }) {
   );
 }
 
+const resolvedAppLogoCache = new Map();
+const resolvedAppLogoInFlight = new Map();
+
+function getAppLogoCacheKey(appName, appId) {
+  return `${String(appId || '').trim()}|${String(appName || '').trim()}`.toLowerCase();
+}
+
+function resolveCachedAppLogo(appName, appId, title) {
+  const key = getAppLogoCacheKey(appName, appId);
+  if (!key || key === '|' || !window.twocode?.resolveAppLogo) {
+    return Promise.resolve(null);
+  }
+  if (resolvedAppLogoCache.has(key)) {
+    return Promise.resolve(resolvedAppLogoCache.get(key));
+  }
+  if (resolvedAppLogoInFlight.has(key)) {
+    return resolvedAppLogoInFlight.get(key);
+  }
+  const promise = window.twocode
+    .resolveAppLogo({ app: appName, appId, title })
+    .then((dataUri) => {
+      const valid = isSafeNotificationImage(dataUri) ? dataUri : null;
+      resolvedAppLogoCache.set(key, valid);
+      return valid;
+    })
+    .catch(() => null)
+    .finally(() => {
+      resolvedAppLogoInFlight.delete(key);
+    });
+  resolvedAppLogoInFlight.set(key, promise);
+  return promise;
+}
+
 function NotifBrandIcon({ brand, logo, appName, banner }) {
   const [logoFailed, setLogoFailed] = useState(false);
-  if (logo && isSafeNotificationImage(logo) && !logoFailed) {
-    return <img src={logo} alt="" className="notif-toast-app-logo" onError={() => setLogoFailed(true)} />;
+  const resolvedAppName = appName || banner?.app || '';
+  const resolvedAppId = banner?.appId || '';
+  const cacheKey = getAppLogoCacheKey(resolvedAppName, resolvedAppId);
+  const [resolvedLogo, setResolvedLogo] = useState(() => resolvedAppLogoCache.get(cacheKey) || '');
+
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [logo]);
+
+  useEffect(() => {
+    const hasDirectLogo = Boolean(logo && isSafeNotificationImage(logo) && !logoFailed);
+    if (hasDirectLogo) {
+      setResolvedLogo('');
+      return;
+    }
+    const cached = resolvedAppLogoCache.get(cacheKey);
+    if (cached !== undefined) {
+      setResolvedLogo(cached || '');
+      return;
+    }
+    let cancelled = false;
+    resolveCachedAppLogo(resolvedAppName, resolvedAppId, banner?.title).then((dataUri) => {
+      if (!cancelled && dataUri) {
+        setResolvedLogo(dataUri);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [logo, logoFailed, cacheKey, resolvedAppName, resolvedAppId, banner?.title]);
+
+  const effectiveLogo = (!logoFailed && logo && isSafeNotificationImage(logo) ? logo : '') || resolvedLogo;
+  if (effectiveLogo && isSafeNotificationImage(effectiveLogo)) {
+    return <img src={effectiveLogo} alt="" className="notif-toast-app-logo" onError={() => { if (!logoFailed && logo) setLogoFailed(true); else setResolvedLogo(''); }} />;
   }
   const b = String(brand || '').toLowerCase();
   const name = String(appName || banner?.app || banner?.title || '').toLowerCase();
@@ -1753,7 +1818,7 @@ export default function App() {
         accentRgb: notif.accentRgb || '',
         accentSecondaryHex: notif.accentSecondaryHex || '',
         accentSecondaryRgb: notif.accentSecondaryRgb || '',
-        logo: notif.logo || '',
+        logo: notif.logo || notif.appLogoUri || '',
         profileImage: notif.profileImage || notif.avatar || '',
         sender: notif.sender || '',
         notificationKind: notif.notificationKind || '',
@@ -1767,6 +1832,15 @@ export default function App() {
       setToastBanner(notification);
       if (shouldPersistNotification(notification)) {
         setNotificationHistory((items) => [{ ...notification, timestamp: Date.now(), isRead: false }, ...items.filter((item) => item.id !== notifId)].slice(0, 100));
+      }
+      if (!notification.logo) {
+        resolveCachedAppLogo(notification.app, notification.appId, notification.title).then((dataUri) => {
+          if (!dataUri) return;
+          setToastBanner((curr) => (curr && curr.id === notifId && !curr.logo ? { ...curr, logo: dataUri } : curr));
+          setNotificationHistory((items) =>
+            items.map((item) => (item.id === notifId && !item.logo ? { ...item, logo: dataUri } : item))
+          );
+        });
       }
       playNotifSound(islandSettings.notifSound || 'Ding', islandSettings.soundEffects !== false);
       setRoboMood('surprised');
