@@ -1450,6 +1450,8 @@ function animateWindowShapeToMode(modeOrExpanded, customBodyWidth) {
     bodyWidth:
       modeKey === 'music-bar' && typeof customBodyWidth === 'number' && customBodyWidth >= 200
         ? Math.min(322, Math.max(222, Math.round(customBodyWidth)))
+        : modeKey === 'notif-toast' && typeof customBodyWidth === 'number' && customBodyWidth >= 180
+        ? Math.min(460, Math.max(210, Math.round(customBodyWidth)))
         : baseTarget.bodyWidth,
   };
 

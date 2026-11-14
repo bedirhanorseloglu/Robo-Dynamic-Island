@@ -1512,6 +1512,39 @@ export default function App() {
     [toastBanner]
   );
 
+  const dynamicNotifToastWidth = useMemo(() => {
+    const title = String(notifPresentation.title || '').trim();
+    const rawSub = String(notifPresentation.subtitle || '').trim();
+    const subtitle =
+      rawSub && rawSub !== title && rawSub !== notifPresentation.app ? rawSub : '';
+
+    let titleWidth = title.length * 8.4;
+    let subWidth = subtitle.length * 6.8;
+
+    if (typeof document !== 'undefined') {
+      try {
+        const canvas = (window.__twocodeMeasureCanvas ||= document.createElement('canvas'));
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const uiFont =
+            getComputedStyle(document.documentElement).getPropertyValue('--font-family-ui').trim() ||
+            "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+          ctx.font = `600 14.5px ${uiFont}`;
+          titleWidth = ctx.measureText(title).width;
+          if (subtitle) {
+            ctx.font = `450 12.5px ${uiFont}`;
+            subWidth = ctx.measureText(subtitle).width;
+          }
+        }
+      } catch {
+        // Fallback to character-based estimate above.
+      }
+    }
+
+    const contentWidth = Math.max(titleWidth, subWidth);
+    return Math.round(Math.min(460, Math.max(210, contentWidth + 118)));
+  }, [notifPresentation.title, notifPresentation.subtitle, notifPresentation.app]);
+
   const liveMediaRef = useRef(liveMedia);
   liveMediaRef.current = liveMedia;
   const scrubberTrackRef = useRef(null);
@@ -1659,14 +1692,16 @@ export default function App() {
     currentMedia.isPlaying,
   ]);
 
-  // Sync window shape & 60fps animation with Electron main process whenever islandMode or dynamicMusicBarWidth changes
+  // Sync window shape & 60fps animation with Electron main process whenever islandMode or dynamic widths change
   useEffect(() => {
     if (islandMode === 'music-bar') {
       window.twocode?.setIslandMode('music-bar', dynamicMusicBarWidth);
+    } else if (islandMode === 'notif-toast') {
+      window.twocode?.setIslandMode('notif-toast', dynamicNotifToastWidth);
     } else {
       window.twocode?.setIslandMode(islandMode);
     }
-  }, [islandMode, dynamicMusicBarWidth]);
+  }, [islandMode, dynamicMusicBarWidth, dynamicNotifToastWidth]);
 
   // Keep collapsed notch updated if media starts/pauses/stops while collapsed
   useEffect(() => {
@@ -2567,6 +2602,7 @@ export default function App() {
           '--notif-accent-secondary-hex': notifBrand.secondaryHex || notifBrand.hex,
           '--robo-eye-color': islandSettings.eyeColorHex || '#ffffff',
           '--dynamic-music-w': `${dynamicMusicBarWidth}px`,
+          '--dynamic-notif-w': `${dynamicNotifToastWidth}px`,
           ...(hudOverlay.ghelper?.color ? {
             '--ghelper-aura-color': hudOverlay.ghelper.color,
             '--ghelper-aura-color2': hudOverlay.ghelper.color2 || hudOverlay.ghelper.color,
@@ -3474,35 +3510,33 @@ export default function App() {
                       </div>
 
                       <div className="notif-card-content">
-                        <div className="notif-card-top-row">
-                          <span className="notif-card-app-label">{item.app || 'Sistem'}</span>
-                          <span className="notif-card-sep" aria-hidden="true">·</span>
-                          <span className="notif-card-time">{formatNotifTime(item.timestamp)}</span>
-                        </div>
-
                         {(() => {
-                          const appNorm = String(item.app || '').trim().toLocaleLowerCase('tr-TR');
-                          const titleNorm = String(item.title || '').trim().toLocaleLowerCase('tr-TR');
+                          const cardPresentation = resolveNotificationPresentation(item);
+                          const primaryTitle = String(
+                            cardPresentation.title || item.title || item.app || 'Sistem'
+                          ).trim();
+                          const rawSub = String(cardPresentation.subtitle || item.body || '').trim();
                           const hasBody = Boolean(
-                            item.body &&
-                            item.body.trim() &&
-                            item.body !== item.title &&
-                            item.body !== item.app
+                            rawSub &&
+                            rawSub !== primaryTitle &&
+                            rawSub !== item.app
                           );
-                          const showHeadline = Boolean(item.title && item.title.trim() && titleNorm !== appNorm);
                           return (
-                            <div className="notif-card-message-row">
-                              {showHeadline && (
-                                <span className="notif-card-headline">
-                                  <NotificationText text={item.title} />
+                            <>
+                              <div className="notif-card-top-row">
+                                <span className="notif-card-title">
+                                  <NotificationText text={primaryTitle} />
                                 </span>
-                              )}
+                                <span className="notif-card-time">{formatNotifTime(item.timestamp)}</span>
+                              </div>
                               {hasBody && (
-                                <span className="notif-card-body">
-                                  <NotificationText text={item.body} />
-                                </span>
+                                <div className="notif-card-message-row">
+                                  <span className="notif-card-body">
+                                    <NotificationText text={rawSub} />
+                                  </span>
+                                </div>
                               )}
-                            </div>
+                            </>
                           );
                         })()}
                       </div>
