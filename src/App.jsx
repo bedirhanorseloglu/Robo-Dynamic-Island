@@ -2723,23 +2723,24 @@ export default function App() {
           {hudOverlay.type === 'ghelper' && hudOverlay.ghelper ? (
             hudOverlay.ghelper.category === 'aura' ? (
               <div className={`hud-aura-clean effect-${hudOverlay.ghelper.effectType || 'static'}`}>
-                {/* 1. Animated Glowing Keyboard Icon */}
+                {/* 1. Frameless Mode-Reactive Keyboard Icon */}
                 <div
                   className="hud-aura-icon-box"
                   style={{
                     '--glow-color': hudOverlay.ghelper.color || '#00e5ff',
+                    '--glow-color2': hudOverlay.ghelper.color2 || hudOverlay.ghelper.color || '#ff007f',
                   }}
                 >
-                  <Keyboard size={17} strokeWidth={2.3} className="hud-aura-icon" />
+                  <Keyboard size={18} strokeWidth={2.2} className="hud-aura-icon" />
                 </div>
 
-                {/* 2. Clean Minimalist Typography */}
+                {/* 2. Clean Glassmorphism Typography */}
                 <div className="hud-aura-text-row">
-                  <span className="hud-aura-label"></span>
+                  <span className="hud-aura-label">AURA</span>
                   <span className="hud-aura-val">{hudOverlay.ghelper.valueText || 'Sabit'}</span>
                 </div>
 
-                {/* 3. Fluid Animated Color Pill Visualizer */}
+                {/* 3. Frosted Glass Spectrum Pill */}
                 <div
                   className={`hud-aura-pill effect-${hudOverlay.ghelper.effectType || 'static'}`}
                   style={{

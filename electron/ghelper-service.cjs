@@ -187,6 +187,10 @@ class GHelperBridgeClient {
     this.lastDispatchedModeAt = 0;
   }
 
+  notifyPowerChange() {
+    this.lastPowerChangeAt = Date.now();
+  }
+
   shouldSuppressAuraToast() {
     const now = Date.now();
     const isExplicitAuraKey = now - this.lastAuraKeyAt < 1500;
@@ -196,7 +200,7 @@ class GHelperBridgeClient {
     const isRecentGHelperInit = now - this.lastGHelperInitAt < 10000;
     const isRecentBacklight = now - this.lastBacklightAt < 2500;
     const isRecentAutoWake = now - this.lastAutoWakeAt < 4000;
-    const isRecentPowerChange = now - (this.lastPowerChangeAt || 0) < 5000;
+    const isRecentPowerChange = now - (this.lastPowerChangeAt || 0) < 6500;
     return isStartupGrace || isSystemBoot || isRecentGHelperInit || isRecentBacklight || isRecentAutoWake || isRecentPowerChange;
   }
 
@@ -655,6 +659,7 @@ class GHelperBridgeClient {
     // 3. Battery / Barrel Auto Profile Mode: e.g. "Battery Performance Mode: Dengeli", "Barrel Performance Mode: Turbo"
     const profileModeMatch = line.match(/(?:Battery|Barrel)\s+Performance\s+Mode:\s*([^\r\n]+)/i);
     if (profileModeMatch) {
+      this.lastPowerChangeAt = Date.now();
       const raw = profileModeMatch[1].trim();
       const modeMap = {
         Balanced: { id: 0, name: 'Dengeli' },

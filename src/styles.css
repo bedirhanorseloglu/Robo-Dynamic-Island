@@ -982,8 +982,8 @@ body,
 }
 
 /* ============================================================
-   AURA RGB / KEYBOARD COLOR HUD (SADE & AKICI ANİMASYONLU)
-   Obsidian Glass · Glowing Keyboard Glyph · Fluid Spectrum Pill
+   AURA RGB / KEYBOARD COLOR HUD (FROSTED GLASSMORPHISM)
+   Translucent Obsidian Glass · Frosted Icon Badge · Liquid Glass Pill
    ============================================================ */
 
 /* 1. Dynamic Island Morph Shell for Keyboard Aura HUD */
@@ -992,15 +992,20 @@ body,
   height: 36px;
   border-radius: 0 0 18px 18px;
   cursor: pointer;
-  border-color: rgba(255, 255, 255, 0.065) !important;
+  --shell-border-tint: 255, 255, 255;
   background:
-    radial-gradient(ellipse 88% 105% at 50% 120%,
-      color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 18%, transparent) 0%,
-      transparent 72%),
-    linear-gradient(180deg, #13161f 0%, #0b0d13 100%) !important;
+    radial-gradient(ellipse 92% 96% at 50% 115%,
+      color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 16%, transparent) 0%,
+      color-mix(in srgb, var(--ghelper-aura-color2, #00e5ff) 6%, transparent) 46%,
+      transparent 76%),
+    linear-gradient(180deg, rgba(22, 26, 36, 0.78) 0%, rgba(10, 12, 18, 0.88) 100%) !important;
+  backdrop-filter: blur(24px) saturate(185%);
+  -webkit-backdrop-filter: blur(24px) saturate(185%);
   box-shadow:
-    inset 0 -1px 4px color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 24%, transparent),
-    0 10px 28px -4px color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 24%, transparent) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 6px color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 18%, transparent),
+    0 12px 30px -4px rgba(0, 0, 0, 0.58),
+    0 6px 20px -4px color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 18%, transparent) !important;
   transition:
     width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
     height 0.28s cubic-bezier(0.16, 1, 0.3, 1),
@@ -1009,18 +1014,22 @@ body,
     background 0.3s ease !important;
 }
 
-/* Precision optical underglow laser beam on the bottom curved rim */
+/* Subtle glass rim refraction along the bottom curve */
 .notch-morph-shell.state-hud.has-aura-hud::after {
   content: '';
   position: absolute;
   bottom: 0;
-  left: 22%;
-  right: 22%;
-  height: 1.5px;
+  left: 16%;
+  right: 16%;
+  height: 1px;
   border-radius: 99px;
-  background: var(--ghelper-aura-gradient, var(--ghelper-aura-color, #00e5ff));
-  opacity: 0.9;
-  filter: blur(0.5px);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--ghelper-aura-color, #00e5ff) 62%, rgba(255, 255, 255, 0.45)) 50%,
+    transparent 100%
+  );
+  opacity: 0.72;
   pointer-events: none;
   z-index: 2;
   transition: background 0.3s ease, opacity 0.3s ease;
@@ -1028,8 +1037,9 @@ body,
 
 /* Effect variations on the Island container */
 .notch-morph-shell.state-hud.has-aura-hud.effect-rainbow::after {
-  background: linear-gradient(90deg, #ff0055, #ff9900, #ffee00, #00ff66, #00bbff, #7700ff, #ff0055);
+  background: linear-gradient(90deg, transparent, #ff0055, #ff9900, #ffee00, #00ff66, #00bbff, #7700ff, transparent);
   background-size: 200% 100%;
+  opacity: 0.82;
   animation: aura-laser-rainbow 2.6s linear infinite;
 }
 
@@ -1045,20 +1055,20 @@ body,
 @keyframes aura-island-breathe {
   0% {
     box-shadow:
-      inset 0 0 0 1px rgba(255, 255, 255, 0.1),
-      inset 0 -1px 4px color-mix(in srgb, var(--ghelper-aura-color, #ff6b6b) 25%, transparent),
-      0 6px 16px -4px color-mix(in srgb, var(--ghelper-aura-color, #ff6b6b) 20%, transparent) !important;
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -1px 4px color-mix(in srgb, var(--ghelper-aura-color, #ff6b6b) 16%, transparent),
+      0 10px 24px -4px rgba(0, 0, 0, 0.54) !important;
   }
   100% {
     box-shadow:
-      inset 0 0 0 1px rgba(255, 255, 255, 0.16),
-      inset 0 -2px 9px color-mix(in srgb, var(--ghelper-aura-color, #ff6b6b) 55%, transparent),
-      0 12px 34px -2px color-mix(in srgb, var(--ghelper-aura-color, #ff6b6b) 45%, transparent) !important;
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -2px 10px color-mix(in srgb, var(--ghelper-aura-color, #ff6b6b) 36%, transparent),
+      0 14px 32px -2px color-mix(in srgb, var(--ghelper-aura-color, #ff6b6b) 28%, transparent) !important;
   }
 }
 
 .notch-morph-shell.state-hud.has-aura-hud .layer-hud {
-  padding: 0 14px;
+  padding: 0 13px;
   background: transparent !important;
 }
 
@@ -1067,50 +1077,58 @@ body,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   height: 100%;
 }
 
-/* Left: Animated Glowing Keyboard Icon */
+/* Left: Frameless Mode-Reactive Keyboard Icon */
 .hud-aura-icon-box {
-  width: 26px;
-  height: 26px;
-  border-radius: 7.5px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 0 10px color-mix(in srgb, var(--glow-color, #00e5ff) 32%, transparent);
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.25s ease;
 }
 
 .hud-aura-icon {
-  color: var(--glow-color, #00e5ff);
-  filter: drop-shadow(0 0 6px var(--glow-color, #00e5ff));
-  transition: all 0.25s ease;
+  color: color-mix(in srgb, var(--glow-color, #00e5ff) 88%, #ffffff 12%);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--glow-color, #00e5ff) 75%, transparent));
+  transition: color 0.25s ease, filter 0.25s ease;
 }
 
-/* Keyboard Icon Animations per effect */
+/* Keyboard Icon Animations per exact G-Helper Aura effect */
+.hud-aura-clean.effect-gradient .hud-aura-icon,
+.hud-aura-clean.effect-custom .hud-aura-icon {
+  animation: aura-icon-dual 2.8s ease-in-out infinite alternate;
+}
+
+@keyframes aura-icon-dual {
+  0% {
+    color: var(--glow-color, #00e5ff);
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--glow-color, #00e5ff) 75%, transparent));
+  }
+  100% {
+    color: var(--glow-color2, #ff007f);
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--glow-color2, #ff007f) 80%, transparent));
+  }
+}
+
 .hud-aura-clean.effect-rainbow .hud-aura-icon,
 .hud-aura-clean.effect-colorcycle .hud-aura-icon,
 .hud-aura-clean.effect-zonetest .hud-aura-icon {
-  background: linear-gradient(135deg, #ff0055, #ff9900, #00e676, #00b0ff, #7c4dff, #ff0055);
-  background-size: 250% 250%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.65));
-  animation: aura-icon-rainbow 3s linear infinite;
+  color: #ff2e7a;
+  filter: drop-shadow(0 0 7px rgba(255, 46, 122, 0.85));
+  animation: aura-icon-spectrum 2.6s linear infinite;
 }
 
-@keyframes aura-icon-rainbow {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+@keyframes aura-icon-spectrum {
+  0% { filter: hue-rotate(0deg) drop-shadow(0 0 7px rgba(255, 46, 122, 0.85)); }
+  100% { filter: hue-rotate(360deg) drop-shadow(0 0 7px rgba(255, 46, 122, 0.85)); }
 }
 
 .hud-aura-clean.effect-breathe .hud-aura-icon {
@@ -1119,11 +1137,13 @@ body,
 
 @keyframes aura-icon-breathe {
   0% {
-    opacity: 0.45;
+    opacity: 0.4;
+    transform: scale(0.95);
     filter: drop-shadow(0 0 2px var(--glow-color, #ff6b6b));
   }
   100% {
     opacity: 1;
+    transform: scale(1.04);
     filter: drop-shadow(0 0 10px var(--glow-color, #ff6b6b));
   }
 }
@@ -1134,7 +1154,7 @@ body,
 
 @keyframes aura-icon-flash {
   0%, 100% {
-    opacity: 0.3;
+    opacity: 0.25;
     filter: drop-shadow(0 0 2px var(--glow-color, #ffffff));
   }
   50% {
@@ -1143,70 +1163,128 @@ body,
   }
 }
 
+.hud-aura-clean.effect-heatmap .hud-aura-icon {
+  animation: aura-icon-heatmap 2.8s ease-in-out infinite alternate;
+}
+
+@keyframes aura-icon-heatmap {
+  0% { color: #007aff; filter: drop-shadow(0 0 6px rgba(0, 122, 255, 0.8)); }
+  35% { color: #34c759; filter: drop-shadow(0 0 7px rgba(52, 199, 89, 0.8)); }
+  70% { color: #ffcc00; filter: drop-shadow(0 0 7px rgba(255, 204, 0, 0.85)); }
+  100% { color: #ff3b30; filter: drop-shadow(0 0 8px rgba(255, 59, 48, 0.85)); }
+}
+
+.hud-aura-clean.effect-gpumode .hud-aura-icon {
+  animation: aura-icon-gpumode 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes aura-icon-gpumode {
+  0% { color: #76b900; filter: drop-shadow(0 0 7px rgba(118, 185, 0, 0.8)); }
+  100% { color: #00e5ff; filter: drop-shadow(0 0 7px rgba(0, 229, 255, 0.8)); }
+}
+
+.hud-aura-clean.effect-ambient .hud-aura-icon {
+  animation: aura-icon-ambient 2.6s ease-in-out infinite alternate;
+}
+
+@keyframes aura-icon-ambient {
+  0% { color: #00c6ff; filter: drop-shadow(0 0 7px rgba(0, 198, 255, 0.8)); }
+  50% { color: #0072ff; filter: drop-shadow(0 0 8px rgba(0, 114, 255, 0.8)); }
+  100% { color: #00f2fe; filter: drop-shadow(0 0 7px rgba(0, 242, 254, 0.85)); }
+}
+
+.hud-aura-clean.effect-battery .hud-aura-icon {
+  animation: aura-icon-battery 2.8s ease-in-out infinite alternate;
+}
+
+@keyframes aura-icon-battery {
+  0% { color: #34c759; filter: drop-shadow(0 0 6px rgba(52, 199, 89, 0.8)); }
+  100% { color: #ffd60a; filter: drop-shadow(0 0 7px rgba(255, 214, 10, 0.8)); }
+}
+
+.hud-aura-clean.effect-audiospectrum .hud-aura-icon {
+  animation: aura-icon-spectrum-audio 1.6s linear infinite;
+}
+
+@keyframes aura-icon-spectrum-audio {
+  0%, 100% { color: #78ffd6; filter: drop-shadow(0 0 7px rgba(120, 255, 214, 0.85)); }
+  33% { color: #00c6ff; filter: drop-shadow(0 0 8px rgba(0, 198, 255, 0.85)); }
+  66% { color: #ff007f; filter: drop-shadow(0 0 8px rgba(255, 0, 127, 0.85)); }
+}
+
 .hud-aura-clean.effect-audiopulse .hud-aura-icon {
+  color: #ff007f;
   animation: aura-icon-beat 0.9s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 
 @keyframes aura-icon-beat {
   0%, 100% {
     transform: scale(0.92);
-    opacity: 0.6;
+    opacity: 0.65;
+    color: #7928ca;
+    filter: drop-shadow(0 0 4px rgba(121, 40, 202, 0.7));
   }
   35% {
     transform: scale(1.12);
     opacity: 1;
-    filter: drop-shadow(0 0 10px #ff007f);
+    color: #ff007f;
+    filter: drop-shadow(0 0 10px rgba(255, 0, 127, 0.9));
   }
 }
 
-/* Center: Clean Minimalist Typography */
+/* Center: Clean Minimalist Glass Typography */
 .hud-aura-text-row {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 7px;
   flex: 1;
   min-width: 0;
 }
 
 .hud-aura-label {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.45);
-  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.44);
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .hud-aura-val {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: -0.01em;
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.96);
+  letter-spacing: -0.015em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
 }
 
-/* Right: Fluid Animated Color Pill Visualizer */
+/* Right: Frosted Glass Spectrum Capsule */
 .hud-aura-pill {
   position: relative;
-  width: 60px;
-  height: 12px;
+  width: 64px;
+  height: 14px;
   border-radius: 99px;
   overflow: hidden;
   flex-shrink: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--pill-color, #00e5ff) 40%, transparent);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.22),
+    0 2px 10px color-mix(in srgb, var(--pill-color, #00e5ff) 28%, transparent);
   transition: all 0.25s ease;
 }
 
 .hud-aura-pill-flow {
   position: absolute;
-  inset: 0;
+  inset: 2px;
   border-radius: 99px;
+  opacity: 0.92;
   background: var(--pill-color, #00e5ff);
 }
 

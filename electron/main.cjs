@@ -14,6 +14,7 @@ const {
   session,
   net,
   safeStorage,
+  powerMonitor,
 } = require('electron');
 const path = require('path');
 const { execFile, spawn } = require('child_process');
@@ -1770,11 +1771,18 @@ function startSystemWatcher() {
           }
           if (ev.event === 'ghelper-notification') {
             const parsed = resolveGHelperToast(ev.title);
+            if (parsed?.category === 'fnlock') {
+              continue;
+            }
+            if (parsed?.category === 'aura' && ghelperBridgeClient?.shouldSuppressAuraToast()) {
+              continue;
+            }
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send('system-hud', {
                 type: 'ghelper',
                 value: 0,
                 ghelper: {
+                  ...(parsed || {}),
                   raw: ev.title,
                   label: parsed?.label || 'G-Helper',
                   icon: parsed?.icon || 'ghelper',
@@ -1921,6 +1929,12 @@ app.whenReady().then(() => {
       },
     });
     ghelperBridgeClient.start();
+    powerMonitor.on('on-battery', () => {
+      ghelperBridgeClient?.notifyPowerChange();
+    });
+    powerMonitor.on('on-ac', () => {
+      ghelperBridgeClient?.notifyPowerChange();
+    });
   } catch (err) {
     console.warn('[Main] GHelper pipe bridge setup error:', err.message);
   }
